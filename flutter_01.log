@@ -1,0 +1,95 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter run
+
+## exception
+
+FileSystemException: FileSystemException: Failed to decode data using encoding 'utf-8', path = 'C:\flutter\my_business\android\gradle.properties'
+
+```
+#0      _File._tryDecode (dart:io/file_impl.dart:704:7)
+#1      _File.readAsStringSync (dart:io/file_impl.dart:715:7)
+#2      ForwardingFile.readAsStringSync (package:file/src/forwarding/forwarding_file.dart:99:16)
+#3      ErrorHandlingFile.readAsStringSync.<anonymous closure> (package:flutter_tools/src/base/error_handling_io.dart:212:22)
+#4      _runSync (package:flutter_tools/src/base/error_handling_io.dart:552:14)
+#5      ErrorHandlingFile.readAsStringSync (package:flutter_tools/src/base/error_handling_io.dart:211:12)
+#6      isAppUsingAndroidX (package:flutter_tools/src/android/gradle.dart:1085:21)
+#7      _writeAndroidPluginRegistrant (package:flutter_tools/src/flutter_plugins.dart:444:17)
+#8      injectPlugins (package:flutter_tools/src/flutter_plugins.dart:1272:11)
+<asynchronous suspension>
+#9      FlutterProject.ensureReadyForPlatformSpecificTooling (package:flutter_tools/src/project.dart:420:5)
+<asynchronous suspension>
+#10     FlutterCommand.regeneratePlatformSpecificToolingIfApplicable (package:flutter_tools/src/runner/flutter_command.dart:1970:5)
+<asynchronous suspension>
+#11     FlutterCommand.verifyThenRunCommand (package:flutter_tools/src/runner/flutter_command.dart:1926:7)
+<asynchronous suspension>
+#12     FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1590:27)
+<asynchronous suspension>
+#13     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#14     CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+<asynchronous suspension>
+#15     FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:496:9)
+<asynchronous suspension>
+#16     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#17     FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:431:5)
+<asynchronous suspension>
+#18     FlutterCommandRunner.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:307:33)
+<asynchronous suspension>
+#19     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:104:11)
+<asynchronous suspension>
+#20     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#21     main (package:flutter_tools/executable.dart:103:3)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[32m[✓][39m Flutter (Channel stable, 3.41.9, on Microsoft Windows [version 10.0.19045.6466], locale fr-FR) [2,4s]
+    [32m•[39m Flutter version 3.41.9 on channel stable at C:\flutter_windows_3.27.0-stable\flutter
+    [32m•[39m Upstream repository https://github.com/flutter/flutter.git
+    [32m•[39m Framework revision 00b0c91f06 (11 days ago), 2026-04-29 10:03:19 -0700
+    [32m•[39m Engine revision 42d3d75a56
+    [32m•[39m Dart version 3.11.5
+    [32m•[39m DevTools version 2.54.2
+    [32m•[39m Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop, enable-windows-desktop, enable-android, enable-ios, cli-animations, enable-native-assets,
+      omit-legacy-version-file, enable-lldb-debugging, enable-uiscene-migration
+
+[32m[✓][39m Windows Version (10 Professionnel N 64-bit, 22H2, 2009) [16,6s]
+
+[32m[✓][39m Android toolchain - develop for Android devices (Android SDK version 36.1.0) [30,5s]
+    [32m•[39m Android SDK at C:\AndroidSDK\platform-tools-latest-windows
+    [32m•[39m Emulator version unknown
+    [32m•[39m Platform android-36, build-tools 36.1.0
+    [32m•[39m Java binary at: C:\Program Files\Android\Android Studio\jbr\bin\java
+      This is the JDK bundled with the latest Android Studio installation on this machine.
+      To manually set the JDK path, use: `flutter config --jdk-dir="path/to/jdk"`.
+    [32m•[39m Java version OpenJDK Runtime Environment (build 21.0.8+-14018985-b1038.68)
+    [32m•[39m All Android licenses accepted.
+
+[32m[✓][39m Chrome - develop for the web [1 328ms]
+    [32m•[39m Chrome at C:\Program Files\Google\Chrome\Application\chrome.exe
+
+[31m[✗][39m Visual Studio - develop Windows apps [1 325ms]
+    [31m✗[39m Visual Studio not installed; this is necessary to develop Windows apps.
+      Download at https://visualstudio.microsoft.com/downloads/.
+      Please install the "Desktop development with C++" workload, including all of its default components
+
+[32m[✓][39m Connected device (4 available) [2,2s]
+    [32m•[39m Pixel 3 (mobile)  • 88XX03XV8 • android-arm64  • Android 12 (API 31)
+    [32m•[39m Windows (desktop) • windows   • windows-x64    • Microsoft Windows [version 10.0.19045.6466]
+    [32m•[39m Chrome (web)      • chrome    • web-javascript • Google Chrome 147.0.7727.139
+    [32m•[39m Edge (web)        • edge      • web-javascript • Microsoft Edge 148.0.3967.54
+
+[33m[!][39m Network resources [1 723ms]
+    [31m✗[39m A cryptographic error occurred while checking "https://github.com/": Handshake error in client
+      You may be experiencing a man-in-the-middle attack, your network may be compromised, or you may have malware installed on your computer.
+
+[33m![39m Doctor found issues in 2 categories.
+```
