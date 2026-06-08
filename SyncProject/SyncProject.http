@@ -1,0 +1,6 @@
+@SyncProject_HostAddress = http://localhost:5117
+
+GET {{SyncProject_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
