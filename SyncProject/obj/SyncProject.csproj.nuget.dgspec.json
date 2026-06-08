@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\PesonalProjects\\SyncProject\\SyncProject.csproj": {}
+    "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\SyncProject.csproj": {}
   },
   "projects": {
-    "D:\\PesonalProjects\\SyncProject\\SyncProject.csproj": {
+    "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\SyncProject.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\PesonalProjects\\SyncProject\\SyncProject.csproj",
+        "projectUniqueName": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\SyncProject.csproj",
         "projectName": "SyncProject",
-        "projectPath": "D:\\PesonalProjects\\SyncProject\\SyncProject.csproj",
+        "projectPath": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\SyncProject.csproj",
         "packagesPath": "C:\\Users\\AFRISOFT\\.nuget\\packages\\",
-        "outputPath": "D:\\PesonalProjects\\SyncProject\\obj\\",
+        "outputPath": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

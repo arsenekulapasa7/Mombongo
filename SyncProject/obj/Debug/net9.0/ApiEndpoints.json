@@ -1,0 +1,46 @@
+[
+  {
+    "ContainingType": "SyncProject.Controllers.ConfigurationSyncController",
+    "Method": "SetConfiguration",
+    "RelativePath": "ConfigurationSync/SetConfiguration",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "modelDto",
+        "Type": "SyncProject.Dtos.SynchronizeDto",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": [
+      {
+        "Type": "System.Void",
+        "MediaTypes": [],
+        "StatusCode": 200
+      }
+    ]
+  },
+  {
+    "ContainingType": "SyncProject.Controllers.SynchronizeSyncController",
+    "Method": "Synchronization",
+    "RelativePath": "SynchronizeSync/Synchronization",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "model",
+        "Type": "SyncProject.Models.SynchronizeModel",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": [
+      {
+        "Type": "System.Void",
+        "MediaTypes": [],
+        "StatusCode": 200
+      }
+    ]
+  }
+]

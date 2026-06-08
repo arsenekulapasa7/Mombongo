@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SyncProject")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+aea559e8ea165e9fff500be552c4ab60e9084270")]
 [assembly: System.Reflection.AssemblyProductAttribute("SyncProject")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SyncProject")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -62,3 +62,5 @@ app.UseSwaggerUI(options => // UseSwaggerUI is called only in Development.
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

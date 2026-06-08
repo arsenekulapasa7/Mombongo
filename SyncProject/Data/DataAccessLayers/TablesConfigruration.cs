@@ -16,7 +16,7 @@ public class TablesConfiguration : IDisposable
         }
         else
         {
-            File.WriteAllText(filePath, string.Empty);
+            //File.WriteAllText(filePath, string.Empty);
             _streamwriter = new StreamWriter(filePath, true);
         }
     }
