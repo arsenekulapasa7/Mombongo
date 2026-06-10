@@ -22,11 +22,14 @@ class _ListeArticlesState extends State<ListeArticles> {
   List<Map<String, dynamic>> _allDepots = [];
   bool _isLoading = true;
   int _refreshKey = 0;
+  int _unsyncedCount = 0;
+  bool _isSyncing = false;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _checkUnsynced();
   }
 
   void _loadUserData() async {
@@ -48,6 +51,55 @@ class _ListeArticlesState extends State<ListeArticles> {
       _selectedDepotId = (role == 'boss') ? null : currentDepotId;
       _isLoading = false;
     });
+  }
+
+  void _checkUnsynced() async {
+    int count = await DatabaseHelper().getUnsyncedCount();
+    if (mounted) setState(() => _unsyncedCount = count);
+  }
+
+  void _handleSync() async {
+    if (_isSyncing || _magasinId == null) return;
+    setState(() => _isSyncing = true);
+    
+    // 1. Envoyer les données locales (PUSH)
+    await DatabaseHelper().syncAllLocalToServer();
+    
+    // 2. Récupérer les données du serveur (PULL)
+    await DatabaseHelper().fetchAllFromServer(_magasinId!);
+    
+    _checkUnsynced();
+    if (!mounted) return;
+    setState(() {
+      _isSyncing = false;
+      _refreshKey++;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Synchronisation terminée"), backgroundColor: Colors.green),
+    );
+  }
+
+  void _performDelete(Article art) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Supprimer l'article"),
+        content: Text("Voulez-vous vraiment supprimer ${art.nom} ?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Annuler")),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Supprimer", style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm == true && art.id != null) {
+      await DatabaseHelper().deleteProduit(art.id!);
+      _checkUnsynced();
+      setState(() { _refreshKey++; });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${art.nom} supprimé")));
+    }
   }
 
   void _addToCart(Article art) {
@@ -75,10 +127,31 @@ class _ListeArticlesState extends State<ListeArticles> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Vente & Articles"),
+        title: const Text("Vente Articles"),
         backgroundColor: Colors.blue.shade800,
         foregroundColor: Colors.white,
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: _isSyncing 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.cloud_upload),
+                onPressed: _isSyncing ? null : _handleSync,
+              ),
+              if (_unsyncedCount > 0 && !_isSyncing)
+                Positioned(
+                  right: 8, top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text('$_unsyncedCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                  ),
+                ),
+            ],
+          ),
           Stack(
             alignment: Alignment.center,
             children: [
@@ -91,10 +164,13 @@ class _ListeArticlesState extends State<ListeArticles> {
                       builder: (context) => CartPage(
                         cartItems: cartItems,
                         depotId: _selectedDepotId ?? 0,
-                        onSaleConfirmed: () => setState(() => cartItems.clear()),
+                        onSaleConfirmed: () {
+                          setState(() => cartItems.clear());
+                          _checkUnsynced();
+                        },
                       ),
                     ),
-                  ).then((_) => setState(() { _refreshKey++; }));
+                  ).then((_) => setState(() { _refreshKey++; _checkUnsynced(); }));
                 },
               ),
               if (cartItems.isNotEmpty)
@@ -152,7 +228,10 @@ class _ListeArticlesState extends State<ListeArticles> {
                       child: ListTile(
                         title: Text(art.nom, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text("Dépôt: ${item['nomDepot'] ?? 'N/A'}\nPrix: ${art.prix} USD | Stock: ${art.quantite}"),
-                        trailing: IconButton(icon: const Icon(Icons.add_shopping_cart, color: Colors.blue), onPressed: () => _addToCart(art)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.add_shopping_cart, color: Colors.blue), 
+                          onPressed: () => _addToCart(art)
+                        ),
                       ),
                     );
                   },

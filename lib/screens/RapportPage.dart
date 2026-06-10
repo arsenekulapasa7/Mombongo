@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:my_business/database/database_helper.dart';
 import 'package:my_business/utilis/auth_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert'; // Pour décoder le JSON
 
 class RapportPage extends StatefulWidget {
   const RapportPage({super.key});

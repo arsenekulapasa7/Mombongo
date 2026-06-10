@@ -8,6 +8,7 @@ import 'package:my_business/screens/login_page.dart';
 import 'package:my_business/screens/UserManagementPage.dart';
 import 'package:my_business/screens/liste_articles.dart';
 import 'package:my_business/screens/historique_ventes.dart';
+import 'package:my_business/utilis/sync_service.dart';
 
 class StockPage extends StatefulWidget {
   const StockPage({super.key});
@@ -25,11 +26,14 @@ class _StockPageState extends State<StockPage> {
   int? _selectedFilterDepotId; // null = global pour le boss
   String _role = "vendeur"; 
   int _refreshKey = 0;
+  int _unsyncedCount = 0;
+  bool _isSyncing = false;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _checkUnsynced();
   }
 
   void _loadUserData() async {
@@ -73,6 +77,37 @@ class _StockPageState extends State<StockPage> {
     });
   }
 
+
+  Future<void> _checkUnsynced() async { // <--- Changez void en Future<void>
+    int count = await DatabaseHelper().getUnsyncedCount();
+    if (mounted) {
+      setState(() { _unsyncedCount = count; });
+    }
+  }
+
+  void _handleSync() async {
+    if (_isSyncing) return;
+    setState(() => _isSyncing = true);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Synchronisation en cours..."), duration: Duration(seconds: 1)),
+    );
+
+    await DatabaseHelper().syncAllLocalToServer();
+    // On peut aussi faire un pull après le push
+    // await DatabaseHelper().fetchAllFromServer(await AuthService.getLastSyncDate());
+    
+    _checkUnsynced();
+    setState(() => _isSyncing = false);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Synchronisation terminée"), backgroundColor: Colors.green),
+      );
+      setState(() { _refreshKey++; });
+    }
+  }
+
   Future<bool?> _confirmDelete(Article art) async {
     return await showDialog<bool>(
       context: context,
@@ -93,11 +128,15 @@ class _StockPageState extends State<StockPage> {
   void _deleteArticle(Article art) async {
     if (art.id != null) {
       await DatabaseHelper().deleteProduit(art.id!);
-      setState(() { _refreshKey++; });
+      _checkUnsynced();
       if (!mounted) return;
+      setState(() { _refreshKey++; });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${art.nom} supprimé")));
     }
   }
+  // Variable pour stocker le nombre d'éléments non sync
+
+  // La fonction qui manque et qui cause l'erreur rouge :
 
   void _ouvrirFormulaireAjout(BuildContext context) {
     final nomController = TextEditingController();
@@ -124,7 +163,7 @@ class _StockPageState extends State<StockPage> {
 
               if (_role == 'boss')
                 DropdownButtonFormField<int>(
-                  initialValue: targetDepotId, // FIX: Use initialValue
+                  initialValue: targetDepotId,
                   decoration: const InputDecoration(labelText: "Dépôt de destination"),
                   items: _allDepots.map((d) {
                     return DropdownMenuItem<int>(
@@ -170,6 +209,7 @@ class _StockPageState extends State<StockPage> {
                   };
 
                   await DatabaseHelper().insertProduit(nouveauProduit, targetDepotId!);
+                  _checkUnsynced();
 
                   if (!mounted) return;
                   navigator.pop();
@@ -210,6 +250,7 @@ class _StockPageState extends State<StockPage> {
                 int? depotId = art.depotId ?? _selectedFilterDepotId ?? _currentDepotId;
                 if (depotId != null) {
                   await DatabaseHelper().reaprovisionner(art.id!, qte, depotId);
+                  _checkUnsynced();
                   if (!mounted) return;
                   navigator.pop();
                   setState(() { _refreshKey++; });
@@ -240,6 +281,7 @@ class _StockPageState extends State<StockPage> {
               final navigator = Navigator.of(context);
               if (depotController.text.isNotEmpty && _magasinId != null) {
                 await DatabaseHelper().addDepot(depotController.text, _magasinId!);
+                _checkUnsynced();
                 if (!mounted) return;
                 _loadUserData(); 
                 navigator.pop();
@@ -252,6 +294,7 @@ class _StockPageState extends State<StockPage> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -259,6 +302,80 @@ class _StockPageState extends State<StockPage> {
         title: const Text("Gestion du Stock"),
         backgroundColor: Colors.blue.shade800,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.save_alt), // Icône de téléchargement/sauvegarde
+            tooltip: "Sauvegarder la base de données",
+            onPressed: () async {
+              await DatabaseHelper.sauvegarderBaseVersGmail();
+            },
+          ),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+
+              IconButton(
+                icon: _isSyncing
+                    ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+                    : const Icon(Icons.cloud_upload),
+                onPressed: _isSyncing
+                    ? null
+                    : () async {
+                  setState(() => _isSyncing = true);
+                  try {
+                    // 1. Exécuter la synchronisation
+                    await SyncService().synchronizeData();
+
+                    // 2. IMPORTANT : Mettre à jour le compteur de badge
+                    await _checkUnsynced();
+
+                    // 3. Recharger les données locales
+                    _loadUserData();
+
+                    if (mounted) {
+                      setState(() {
+                        _isSyncing = false;
+                        _refreshKey++;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Synchronisation réussie !")),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      setState(() => _isSyncing = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
+                },
+              ), // Fin de l'IconButton
+              if (_unsyncedCount > 0 && !_isSyncing)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      '$_unsyncedCount',
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
       drawer: Drawer(
         child: ListView(
@@ -370,7 +487,7 @@ class _StockPageState extends State<StockPage> {
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: DropdownButtonFormField<int?>(
-                initialValue: _selectedFilterDepotId,
+                value: _selectedFilterDepotId,
                 decoration: const InputDecoration(labelText: "Filtrer par Dépôt", border: OutlineInputBorder()),
                 items: [
                   const DropdownMenuItem(value: null, child: Text("Global (Mon Magasin)")),

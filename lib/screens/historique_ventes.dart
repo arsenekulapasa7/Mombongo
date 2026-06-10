@@ -3,6 +3,8 @@ import '../database/database_helper.dart';
 import '../utilis/pdf_service.dart';
 import '../utilis/auth_service.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert'; // Pour décoder le JSON
 
 class HistoriqueVentes extends StatefulWidget {
   const HistoriqueVentes({super.key});

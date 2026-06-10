@@ -11,26 +11,28 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   final _nomController = TextEditingController();
   final _passController = TextEditingController();
-  final _entrepriseController = TextEditingController();
-  String _niveau = 'vendeur'; 
+  // Correction ici : Initialisation du contrôleur unique pour la boutique
+  final _boutiqueController = TextEditingController();
+  String _niveau = 'vendeur';
 
   @override
   void dispose() {
     _nomController.dispose();
     _passController.dispose();
-    _entrepriseController.dispose();
+    _boutiqueController.dispose();
     super.dispose();
   }
 
   void _register() async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
-    
+
     String nom = _nomController.text.trim();
     String pass = _passController.text.trim();
-    String nomEntreprise = _entrepriseController.text.trim();
+    String boutiqueSaisie = _boutiqueController.text.trim();
 
-    if (nom.isEmpty || pass.isEmpty || nomEntreprise.isEmpty) {
+    // 1. Validation des champs vides
+    if (nom.isEmpty || pass.isEmpty || boutiqueSaisie.isEmpty) {
       scaffoldMessenger.showSnackBar(
         const SnackBar(content: Text("Veuillez remplir tous les champs")),
       );
@@ -38,27 +40,48 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     try {
-      // Correction : Utilisation des paramètres nommés pour correspondre à DatabaseHelper.register
+      // APPEL À LA BASE DE DONNÉES
+      // Le DatabaseHelper va vérifier si la boutique existe pour le vendeur
+      // ou la créer si c'est un Boss.
       await DatabaseHelper().register(
         nom: nom,
         mdp: pass,
         niveau: _niveau,
-        nomMagasin: nomEntreprise,
+        nomMagasin: boutiqueSaisie,
       );
 
       if (!mounted) return;
 
       String message = (_niveau == 'boss')
-          ? "Compte Boss et Entreprise '$nomEntreprise' créés ! Connectez-vous."
-          : "Demande envoyée pour rejoindre '$nomEntreprise' ! Attendez la validation du Boss.";
+          ? "Compte Boss et boutique '$boutiqueSaisie' créés !"
+          : "Demande envoyée ! Attendez la validation du Boss de '$boutiqueSaisie'.";
 
       scaffoldMessenger.showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.green),
       );
       navigator.pop();
+
     } catch (e) {
       if (!mounted) return;
-      String errorMsg = e.toString().replaceAll("Exception:", "").trim();
+
+      String errorMsg = e.toString();
+
+      // LOGIQUE D'UNICITÉ ET DE VÉRIFICATION
+      if (errorMsg.contains("UNIQUE constraint failed")) {
+        if (errorMsg.contains("nomUser")) {
+          errorMsg = "Ce nom d'utilisateur est déjà utilisé.";
+        } else if (errorMsg.contains("nomMagasin")) {
+          errorMsg = "Une boutique porte déjà ce nom.";
+        } else {
+          errorMsg = "Ce compte ou cette boutique existe déjà.";
+        }
+      } else if (errorMsg.contains("n'existe pas")) {
+        // C'est ici que l'on bloque le vendeur si la boutique n'existe pas
+        errorMsg = "Erreur : La boutique '$boutiqueSaisie' n'existe pas encore. Le Boss doit la créer d'abord.";
+      } else {
+        errorMsg = errorMsg.replaceAll("Exception:", "").trim();
+      }
+
       scaffoldMessenger.showSnackBar(
         SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
       );
@@ -73,55 +96,66 @@ class _RegisterPageState extends State<RegisterPage> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            const Icon(Icons.business_center, size: 80, color: Colors.blue),
+            const Icon(Icons.person_add, size: 80, color: Colors.blue),
             const SizedBox(height: 20),
+
+            // CHAMP NOM
             TextField(
               controller: _nomController,
               decoration: const InputDecoration(
-                labelText: "Nom d'utilisateur", 
+                labelText: "Nom d'utilisateur",
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.person),
               ),
             ),
             const SizedBox(height: 15),
+
+            // CHAMP MOT DE PASSE
             TextField(
               controller: _passController,
               decoration: const InputDecoration(
-                labelText: "Mot de passe", 
+                labelText: "Mot de passe",
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.lock),
               ),
               obscureText: true,
             ),
             const SizedBox(height: 15),
+
+            // CHAMP BOUTIQUE (POUR TOUS)
             TextField(
-              controller: _entrepriseController,
-              decoration: const InputDecoration(
-                labelText: "Nom de l'Entreprise / Magasin", 
-                hintText: "Entrez le nom de votre structure",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.store),
+              controller: _boutiqueController,
+              decoration: InputDecoration(
+                // Libellé dynamique selon le rôle choisi
+                labelText: _niveau == 'boss' ? "Nom de votre  boutique" : "Boutique à rejoindre",
+                hintText: _niveau == 'boss' ? "Ex: Ma Boutique" : "Saisissez le nom exact du dépôt",
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.store),
               ),
             ),
             const SizedBox(height: 15),
+
+            // CHOIX DU NIVEAU
             DropdownButtonFormField<String>(
-              initialValue: _niveau,
+              value: _niveau,
               items: const [
-                DropdownMenuItem(value: 'vendeur', child: Text("Vendeur")),
-                DropdownMenuItem(value: 'boss', child: Text("Boss")),
+                DropdownMenuItem(value: 'vendeur', child: Text("Vendeur ")),
+                DropdownMenuItem(value: 'boss', child: Text("Boss ")),
               ],
               onChanged: (v) => setState(() => _niveau = v!),
               decoration: const InputDecoration(
-                labelText: "Niveau d'accès", 
+                labelText: "Type de compte",
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 30),
+
+            // BOUTON VALIDER
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade800,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 50)
+                  backgroundColor: Colors.blue.shade800,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50)
               ),
               onPressed: _register,
               child: const Text("S'INSCRIRE"),

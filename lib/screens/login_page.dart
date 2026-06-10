@@ -15,6 +15,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController _nomController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -34,13 +35,16 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    setState(() => _isLoading = true);
+
     try {
       final user = await DatabaseHelper().login(nom, mdp);
 
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
       if (user != null) {
         if (user['UserState'] == 1) {
-          // Enregistrer les IDs dans la session
-          // Correction : magasin_id et setMagasinId conformément à la v18 de la DB
           int magasinId = user['magasin_id'];
           int? depotId = user['depot_id'];
           String role = user['niveauUser'] ?? 'vendeur';
@@ -57,9 +61,13 @@ class _LoginPageState extends State<LoginPage> {
               MaterialPageRoute(builder: (context) => const StockPage()),
             );
           } else {
+            // Un vendeur sans dépôt assigné est bloqué ici
             if (depotId == null) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Votre compte est actif, mais aucun dépôt ne vous a été assigné.")),
+                const SnackBar(
+                  content: Text("Compte actif, mais aucun dépôt ne vous a été assigné par le Boss."),
+                  backgroundColor: Colors.orange,
+                ),
               );
               return;
             }
@@ -69,7 +77,6 @@ class _LoginPageState extends State<LoginPage> {
             );
           }
         } else {
-          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text("Votre compte est en attente de validation par le Boss."),
@@ -78,7 +85,6 @@ class _LoginPageState extends State<LoginPage> {
           );
         }
       } else {
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Nom d'utilisateur ou mot de passe incorrect"),
@@ -88,8 +94,9 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       if (!mounted) return;
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur de connexion : $e"), backgroundColor: Colors.red),
+        SnackBar(content: Text("Erreur technique : $e"), backgroundColor: Colors.red),
       );
     }
   }
@@ -108,11 +115,7 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 20),
               const Text(
                 "Connexion",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 40),
               TextField(
@@ -146,8 +149,10 @@ class _LoginPageState extends State<LoginPage> {
                   foregroundColor: Colors.blue.shade900,
                   minimumSize: const Size(double.infinity, 50),
                 ),
-                onPressed: _login,
-                child: const Text("SE CONNECTER", style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: _isLoading ? null : _login,
+                child: _isLoading 
+                  ? const CircularProgressIndicator() 
+                  : const Text("SE CONNECTER", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 20),
               TextButton(
