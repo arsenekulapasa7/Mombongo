@@ -47,8 +47,8 @@ class DatabaseHelper {
   Future _onCreate(Database db, int version) async {
     await db.execute('CREATE TABLE magasins (idMagasin INTEGER PRIMARY KEY AUTOINCREMENT, nomMagasin TEXT NOT NULL UNIQUE, is_synced INTEGER DEFAULT 0)');
     await db.execute('CREATE TABLE depots (idDepot INTEGER PRIMARY KEY AUTOINCREMENT, nomDepot TEXT NOT NULL, magasin_id INTEGER NOT NULL, is_synced INTEGER DEFAULT 0, FOREIGN KEY (magasin_id) REFERENCES magasins (idMagasin) ON DELETE CASCADE)');
-    await db.execute('CREATE TABLE produits (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT NOT NULL COLLATE NOCASE, quantite INTEGER DEFAULT 0, prix_unitaire REAL DEFAULT 0.0, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
-    await db.execute('CREATE TABLE ventes (id INTEGER PRIMARY KEY AUTOINCREMENT, id_transaction TEXT, produit_id INTEGER, nom_produit TEXT, nom_client TEXT, quantite_vendue INTEGER, prix_total REAL, date_vente TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
+    await db.execute('CREATE TABLE produits (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT NOT NULL COLLATE NOCASE, quantite INTEGER DEFAULT 0, prix_unitaire NUMERIC DEFAULT 0.0, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
+    await db.execute('CREATE TABLE ventes (id INTEGER PRIMARY KEY AUTOINCREMENT, id_transaction TEXT, produit_id INTEGER, nom_produit TEXT, nom_client TEXT, quantite_vendue INTEGER, prix_total NUMERIC, date_vente TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
     await db.execute('CREATE TABLE mouvements (id INTEGER PRIMARY KEY AUTOINCREMENT, produit_id INTEGER, nom_produit TEXT, quantite INTEGER, type TEXT, date_mouvement TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
     await db.execute('''CREATE TABLE utilisateurs (
       idUser INTEGER PRIMARY KEY AUTOINCREMENT, 
