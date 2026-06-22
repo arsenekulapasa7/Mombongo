@@ -3,8 +3,13 @@ import '../database/database_helper.dart';
 import '../utilis/pdf_service.dart';
 import '../utilis/auth_service.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert'; // Pour décoder le JSON
+import '../utilis/sync_service.dart';
+import 'StockPage.dart';
+import 'liste_articles.dart';
+import 'DashbordPage.dart';
+import 'RapportPage.dart';
+import 'UserManagementPage.dart';
+import 'login_page.dart';
 
 class HistoriqueVentes extends StatefulWidget {
   const HistoriqueVentes({super.key});
@@ -21,16 +26,21 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
   int? _currentDepotId;
   int? _magasinId;
   String _nomDepot = "Mon Point de Vente";
-  int? _selectedFilterDepotId; // null = global pour le magasin (Boss)
+  int? _selectedFilterDepotId; 
   List<Map<String, dynamic>> _allDepots = [];
   String _role = "vendeur";
+  
+  // Variables pour la synchronisation
+  bool _isSyncing = false;
+  int _unsyncedCount = 0;
+  int _refreshKey = 0;
 
   @override
   void initState() {
     super.initState();
-    // Initialisation par défaut pour éviter l'erreur late initialization
     _ventesFuture = Future.value([]);
     _initData();
+    _checkUnsynced();
   }
 
   void _initData() async {
@@ -40,29 +50,16 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
 
     if (magId == null) {
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
       return;
     }
 
-    // Récupérer le nom du dépôt actuel
-    String nomDep = "Mon Point de Vente";
-    final db = await DatabaseHelper().database;
+    final List<Map<String, dynamic>> depots = await DatabaseHelper().getDepots(magId);
     
+    String nomDep = "Mon Point de Vente";
     if (depId != null) {
-      List<Map<String, dynamic>> depRes = await db.query(
-        'depots', 
-        where: 'idDepot = ? AND magasin_id = ?', 
-        whereArgs: [depId, magId]
-      );
-      
-      if (depRes.isNotEmpty) {
-        nomDep = depRes.first['nomDepot'];
-      }
-    }
-
-    List<Map<String, dynamic>> depots = [];
-    if (role == 'boss') {
-      depots = await DatabaseHelper().getDepots(magId);
+      final found = depots.firstWhere((d) => d['idDepot'] == depId, orElse: () => {});
+      if (found.isNotEmpty) nomDep = found['nomDepot'];
     }
 
     if (!mounted) return;
@@ -76,6 +73,67 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
       _selectedFilterDepotId = (role == 'boss') ? null : depId;
       _chargerDonnees();
     });
+  }
+
+  Future<void> _checkUnsynced() async {
+    int count = await DatabaseHelper().getUnsyncedCount();
+    if (mounted) {
+      setState(() => _unsyncedCount = count);
+    }
+  }
+
+  Future<void> _handleSync() async {
+    if (_isSyncing) return;
+    setState(() => _isSyncing = true);
+
+    try {
+      await SyncService().synchronizeData();
+      await _checkUnsynced();
+      _chargerDonnees();
+
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _refreshKey++; 
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Historique synchronisé !"), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("🚨 Échec sync : $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _ouvrirNouveauMagasin() {
+    final nomController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Nouveau Magasin"),
+        content: TextField(controller: nomController, decoration: const InputDecoration(labelText: "Nom de l'entreprise")),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              if (nomController.text.isNotEmpty) {
+                await DatabaseHelper().addMagasin(nomController.text);
+                if (!mounted) return;
+                Navigator.pop(context);
+                _initData();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Magasin créé")));
+              }
+            },
+            child: const Text("Créer"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -92,6 +150,24 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
         magasinId: _magasinId
       );
     });
+  }
+
+  void _imprimerHistorique() async {
+    final rawList = await _ventesFuture;
+    final filteredList = rawList.where((vente) {
+      final nomP = (vente['nom_produit'] ?? "").toString().toLowerCase();
+      final nomC = (vente['nom_client'] ?? "").toString().toLowerCase();
+      final q = _searchQuery.toLowerCase();
+      return nomP.contains(q) || nomC.contains(q);
+    }).toList();
+    
+    if (filteredList.isEmpty) {
+       if (!mounted) return;
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Aucune donnée à imprimer")));
+       return;
+    }
+    
+    await PdfService.imprimerJournalVentes(filteredList, _dateFiltre.isEmpty ? "Global" : _dateFiltre);
   }
 
   void _afficherFacture(Map<String, dynamic> vente) {
@@ -144,6 +220,32 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            icon: const Icon(Icons.print),
+            onPressed: _imprimerHistorique,
+            tooltip: "Imprimer l'historique",
+          ),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: _isSyncing
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.cloud_upload),
+                onPressed: _isSyncing ? null : _handleSync,
+              ),
+              if (_unsyncedCount > 0 && !_isSyncing)
+                Positioned(
+                  right: 8, top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text('$_unsyncedCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                  ),
+                ),
+            ],
+          ),
+          IconButton(
             icon: const Icon(Icons.calendar_today),
             onPressed: () async {
               DateTime? pickedDate = await showDatePicker(
@@ -170,6 +272,56 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
             },
           )
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue.shade800),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shopping_basket, color: Colors.white, size: 40),
+                  SizedBox(height: 10),
+                  Text("Ma Gestion", style: TextStyle(color: Colors.white, fontSize: 24)),
+                ],
+              ),
+            ),
+            ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
+            ListTile(leading: const Icon(Icons.shopping_cart, color: Colors.green), title: const Text("Vendre"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ListeArticles())); }),
+            ListTile(leading: const Icon(Icons.history, color: Colors.orange), title: const Text("Historique"), onTap: () => Navigator.pop(context)),
+            const Divider(),
+            ListTile(leading: const Icon(Icons.dashboard), title: const Text("Tableau de Bord"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardPage())); }),
+            if (_role == 'boss') ...[
+               ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
+               ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
+            ],
+            ListTile(leading: const Icon(Icons.analytics), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.grey), 
+              title: const Text("Déconnexion"), 
+              onTap: () async {
+                bool confirm = await showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text("Déconnexion"),
+                    content: const Text("Voulez-vous vraiment vous déconnecter ?"),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
+                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
+                    ],
+                  ),
+                ) ?? false;
+                if (confirm) {
+                  await AuthService.logout();
+                  if (!mounted) return;
+                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                }
+              }
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -223,6 +375,7 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
           ),
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
+              key: ValueKey("ventes_list_$_refreshKey"),
               future: _ventesFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {

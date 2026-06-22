@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:my_business/database/database_helper.dart';
 import 'package:my_business/utilis/auth_service.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert'; // Pour décoder le JSON
+import 'package:my_business/utilis/sync_service.dart';
+import 'StockPage.dart';
+import 'liste_articles.dart';
+import 'historique_ventes.dart';
+import 'RapportPage.dart';
+import 'UserManagementPage.dart';
+import 'login_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -14,15 +19,19 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   late Future<Map<String, double>> _statsFuture;
   int? _magasinId;
-  int? _selectedFilterDepotId; // null = global pour le magasin (Boss)
+  int? _selectedFilterDepotId; 
   List<Map<String, dynamic>> _allDepots = [];
   String _role = "vendeur";
+  bool _isSyncing = false;
+  int _unsyncedCount = 0;
+  int _refreshKey = 0;
 
   @override
   void initState() {
     super.initState();
     _statsFuture = Future.value({'stock': 0, 'recette_jour': 0, 'recette_mois': 0});
     _initData();
+    _checkUnsynced();
   }
 
   void _initData() async {
@@ -32,14 +41,11 @@ class _DashboardPageState extends State<DashboardPage> {
     
     if (magId == null) {
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
       return;
     }
 
-    List<Map<String, dynamic>> depots = [];
-    if (role == 'boss') {
-      depots = await DatabaseHelper().getDepots(magId);
-    }
+    List<Map<String, dynamic>> depots = await DatabaseHelper().getDepots(magId);
 
     if (!mounted) return;
 
@@ -52,6 +58,13 @@ class _DashboardPageState extends State<DashboardPage> {
     });
   }
 
+  Future<void> _checkUnsynced() async {
+    int count = await DatabaseHelper().getUnsyncedCount();
+    if (mounted) {
+      setState(() { _unsyncedCount = count; });
+    }
+  }
+
   void _refreshStats() {
     setState(() {
       _statsFuture = DatabaseHelper().getStatistiques(
@@ -59,6 +72,59 @@ class _DashboardPageState extends State<DashboardPage> {
         magasinId: _magasinId
       );
     });
+  }
+
+  Future<void> _handleSync() async {
+    if (_isSyncing) return;
+    setState(() => _isSyncing = true);
+
+    try {
+      await SyncService().synchronizeData();
+      await _checkUnsynced();
+      _refreshStats();
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _refreshKey++; 
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Statistiques synchronisées !"), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("🚨 Échec sync : $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _ouvrirNouveauMagasin() {
+    final nomController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Nouveau Magasin"),
+        content: TextField(controller: nomController, decoration: const InputDecoration(labelText: "Nom de l'entreprise")),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              if (nomController.text.isNotEmpty) {
+                await DatabaseHelper().addMagasin(nomController.text);
+                if (!mounted) return;
+                Navigator.pop(context);
+                _initData();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Magasin créé")));
+              }
+            },
+            child: const Text("Créer"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -73,8 +139,79 @@ class _DashboardPageState extends State<DashboardPage> {
         backgroundColor: Colors.blue.shade800,
         foregroundColor: Colors.white,
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: _isSyncing
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.cloud_upload),
+                onPressed: _isSyncing ? null : _handleSync,
+              ),
+              if (_unsyncedCount > 0 && !_isSyncing)
+                Positioned(
+                  right: 8, top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text('$_unsyncedCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                  ),
+                ),
+            ],
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshStats),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue.shade800),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shopping_basket, color: Colors.white, size: 40),
+                  SizedBox(height: 10),
+                  Text("Ma Gestion", style: TextStyle(color: Colors.white, fontSize: 24)),
+                ],
+              ),
+            ),
+            ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
+            ListTile(leading: const Icon(Icons.shopping_cart, color: Colors.green), title: const Text("Vendre"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ListeArticles())); }),
+            ListTile(leading: const Icon(Icons.history, color: Colors.orange), title: const Text("Historique"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoriqueVentes())); }),
+            const Divider(),
+            ListTile(leading: const Icon(Icons.dashboard, color: Colors.blue), title: const Text("Tableau de Bord"), onTap: () => Navigator.pop(context)),
+            if (_role == 'boss') ...[
+               ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
+               ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
+            ],
+            ListTile(leading: const Icon(Icons.analytics), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.grey), 
+              title: const Text("Déconnexion"), 
+              onTap: () async {
+                bool confirm = await showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text("Déconnexion"),
+                    content: const Text("Voulez-vous vraiment vous déconnecter ?"),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
+                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
+                    ],
+                  ),
+                ) ?? false;
+                if (confirm) {
+                  await AuthService.logout();
+                  if (!mounted) return;
+                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                }
+              }
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -104,6 +241,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           Expanded(
             child: FutureBuilder<Map<String, double>>(
+              key: ValueKey("stats_$_refreshKey"),
               future: _statsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -143,7 +281,7 @@ class _DashboardPageState extends State<DashboardPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1), // Correction : withOpacity au lieu de withValues pour compatibilité
+        color: color.withOpacity(0.1), 
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: color),
       ),

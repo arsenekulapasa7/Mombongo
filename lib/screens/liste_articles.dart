@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/articles.dart';
-import '../screens/historique_ventes.dart';
+import 'historique_ventes.dart';
 import '../utilis/auth_service.dart';
 import '../models/CartItem.dart';
 import 'CartPage.dart';
+import '../utilis/sync_service.dart';
+import 'StockPage.dart';
+import 'DashbordPage.dart';
+import 'RapportPage.dart';
+import 'UserManagementPage.dart';
+import 'login_page.dart';
 
 class ListeArticles extends StatefulWidget {
   const ListeArticles({super.key});
@@ -38,10 +44,9 @@ class _ListeArticlesState extends State<ListeArticles> {
     final magId = await AuthService.getMagasinId();
     final currentDepotId = await AuthService.getDepotId();
     
-    List<Map<String, dynamic>> depotsCharge = [];
-    if (magId != null) {
-      depotsCharge = await DatabaseHelper().getDepots(magId);
-    }
+    if (magId == null) return;
+
+    List<Map<String, dynamic>> depotsCharge = await DatabaseHelper().getDepots(magId);
 
     if (!mounted) return;
     setState(() {
@@ -53,53 +58,63 @@ class _ListeArticlesState extends State<ListeArticles> {
     });
   }
 
-  void _checkUnsynced() async {
+  // FIX : Future<void> pour supprimer l'erreur sur 'await'
+  Future<void> _checkUnsynced() async {
     int count = await DatabaseHelper().getUnsyncedCount();
     if (mounted) setState(() => _unsyncedCount = count);
   }
-
-  void _handleSync() async {
-    if (_isSyncing || _magasinId == null) return;
+  Future<void> _handleSync() async {
+    if (_isSyncing) return;
     setState(() => _isSyncing = true);
-    
-    // 1. Envoyer les données locales (PUSH)
-    await DatabaseHelper().syncAllLocalToServer();
-    
-    // 2. Récupérer les données du serveur (PULL)
-    await DatabaseHelper().fetchAllFromServer(_magasinId!);
-    
-    _checkUnsynced();
-    if (!mounted) return;
-    setState(() {
-      _isSyncing = false;
-      _refreshKey++;
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Synchronisation terminée"), backgroundColor: Colors.green),
-    );
+
+    try {
+      // 1. Exécute la synchronisation (PUSH et PULL)
+      await SyncService().synchronizeData();
+
+      // 2. RECOMPTE les éléments non synchronisés (qui devrait être 0 maintenant)
+      int count = await DatabaseHelper().getUnsyncedCount();
+
+      if (mounted) {
+        setState(() {
+          _unsyncedCount = count; // Mise à jour du badge à 0
+          _isSyncing = false;
+          _refreshKey++; // Rafraîchit la liste à l'écran
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Synchronisation réussie !"), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isSyncing = false);
+      // ... gestion erreur ...
+    }
   }
 
-  void _performDelete(Article art) async {
-    final confirm = await showDialog<bool>(
+  void _ouvrirNouveauMagasin() {
+    final nomController = TextEditingController();
+    showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Supprimer l'article"),
-        content: Text("Voulez-vous vraiment supprimer ${art.nom} ?"),
+      builder: (context) => AlertDialog(
+        title: const Text("Nouveau Magasin"),
+        content: TextField(controller: nomController, decoration: const InputDecoration(labelText: "Nom de l'entreprise")),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Annuler")),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Supprimer", style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              if (nomController.text.isNotEmpty) {
+                await DatabaseHelper().addMagasin(nomController.text);
+                if (!mounted) return;
+                Navigator.pop(context);
+                _loadUserData();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Magasin créé")));
+              }
+            },
+            child: const Text("Créer"),
+          ),
         ],
       ),
     );
-
-    if (confirm == true && art.id != null) {
-      await DatabaseHelper().deleteProduit(art.id!);
-      _checkUnsynced();
-      setState(() { _refreshKey++; });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${art.nom} supprimé")));
-    }
   }
 
   void _addToCart(Article art) {
@@ -170,15 +185,67 @@ class _ListeArticlesState extends State<ListeArticles> {
                         },
                       ),
                     ),
-                  ).then((_) => setState(() { _refreshKey++; _checkUnsynced(); }));
+                  ).then((_) {
+                    setState(() { _refreshKey++; });
+                    _checkUnsynced();
+                  });
                 },
               ),
               if (cartItems.isNotEmpty)
                 Positioned(right: 8, top: 8, child: CircleAvatar(radius: 8, backgroundColor: Colors.red, child: Text("${cartItems.length}", style: const TextStyle(fontSize: 10, color: Colors.white)))),
             ],
           ),
-          IconButton(icon: const Icon(Icons.history), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoriqueVentes()))),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue.shade800),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shopping_basket, color: Colors.white, size: 40),
+                  SizedBox(height: 10),
+                  Text("Ma Gestion", style: TextStyle(color: Colors.white, fontSize: 24)),
+                ],
+              ),
+            ),
+            ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
+            ListTile(leading: const Icon(Icons.shopping_cart, color: Colors.green), title: const Text("Vendre"), onTap: () => Navigator.pop(context)),
+            ListTile(leading: const Icon(Icons.history, color: Colors.orange), title: const Text("Historique"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoriqueVentes())); }),
+            const Divider(),
+            ListTile(leading: const Icon(Icons.dashboard), title: const Text("Tableau de Bord"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardPage())); }),
+            if (_role == 'boss') ...[
+               ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
+               ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
+            ],
+            ListTile(leading: const Icon(Icons.analytics), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.grey), 
+              title: const Text("Déconnexion"), 
+              onTap: () async {
+                bool confirm = await showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text("Déconnexion"),
+                    content: const Text("Voulez-vous vraiment vous déconnecter ?"),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
+                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
+                    ],
+                  ),
+                ) ?? false;
+                if (confirm) {
+                  await AuthService.logout();
+                  if (!mounted) return;
+                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                }
+              }
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -187,7 +254,8 @@ class _ListeArticlesState extends State<ListeArticles> {
               padding: const EdgeInsets.all(10),
               color: Colors.blue.shade50,
               child: DropdownButtonFormField<int?>(
-                value: _selectedDepotId,
+                key: ValueKey("dep_sel_venta_$_selectedDepotId"),
+                initialValue: _selectedDepotId,
                 decoration: const InputDecoration(labelText: "Filtrer par dépôt", border: OutlineInputBorder()),
                 items: [
                   const DropdownMenuItem(value: null, child: Text("Tous les dépôts (Vue Entreprise)")),
@@ -204,39 +272,36 @@ class _ListeArticlesState extends State<ListeArticles> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              key: ValueKey("list_$_selectedDepotId$_refreshKey"),
-              future: DatabaseHelper().getProduits(_selectedDepotId, magasinId: _role == 'boss' ? _magasinId : null),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Aucun article trouvé."));
+            child: RefreshIndicator(
+              onRefresh: _handleSync,
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                key: ValueKey("list_venta_$_selectedDepotId$_refreshKey"),
+                future: DatabaseHelper().getProduits(_selectedDepotId, magasinId: _magasinId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Aucun article trouvé."));
 
-                final filteredData = snapshot.data!.where((item) {
-                  return item['nom'].toString().toLowerCase().contains(_searchQuery.toLowerCase());
-                }).toList();
+                  final filteredData = snapshot.data!.where((item) {
+                    return item['nom'].toString().toLowerCase().contains(_searchQuery.toLowerCase());
+                  }).toList();
 
-                if (filteredData.isEmpty) return const Center(child: Text("Aucun résultat pour cette recherche."));
-
-                return ListView.builder(
-                  itemCount: filteredData.length,
-                  itemBuilder: (context, index) {
-                    final item = filteredData[index];
-                    final art = Article.fromMap(item);
-                    
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      child: ListTile(
-                        title: Text(art.nom, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("Dépôt: ${item['nomDepot'] ?? 'N/A'}\nPrix: ${art.prix} USD | Stock: ${art.quantite}"),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.add_shopping_cart, color: Colors.blue), 
-                          onPressed: () => _addToCart(art)
+                  return ListView.builder(
+                    itemCount: filteredData.length,
+                    itemBuilder: (context, index) {
+                      final item = filteredData[index];
+                      final art = Article.fromMap(item);
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        child: ListTile(
+                          title: Text(art.nom, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("Dépôt: ${item['nomDepot'] ?? 'N/A'}\nPrix: ${art.prix} USD | Stock: ${art.quantite}"),
+                          trailing: IconButton(icon: const Icon(Icons.add_shopping_cart, color: Colors.blue), onPressed: () => _addToCart(art)),
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],
