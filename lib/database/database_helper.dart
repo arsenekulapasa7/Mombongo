@@ -4,9 +4,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/CartItem.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../utilis/auth_service.dart';
+import '../utilis/remote_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter/foundation.dart'; // Pour debugPrint
+
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -16,12 +20,19 @@ class DatabaseHelper {
 
   DatabaseHelper._internal();
 
-  final String _apiUrl = "http://afrisofttech-002-site50.jtempurl.com";
-
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
+  }
+  // Dans database_helper.dart
+  Future<List<Map<String, dynamic>>> getDepots(int magasinId) async {
+    final db = await database;
+    return await db.query(
+        'depots',
+        where: 'magasin_id = ?',
+        whereArgs: [magasinId]
+    );
   }
 
   Future<Database> _initDatabase() async {
@@ -47,8 +58,8 @@ class DatabaseHelper {
   Future _onCreate(Database db, int version) async {
     await db.execute('CREATE TABLE magasins (idMagasin INTEGER PRIMARY KEY AUTOINCREMENT, nomMagasin TEXT NOT NULL UNIQUE, is_synced INTEGER DEFAULT 0)');
     await db.execute('CREATE TABLE depots (idDepot INTEGER PRIMARY KEY AUTOINCREMENT, nomDepot TEXT NOT NULL, magasin_id INTEGER NOT NULL, is_synced INTEGER DEFAULT 0, FOREIGN KEY (magasin_id) REFERENCES magasins (idMagasin) ON DELETE CASCADE)');
-    await db.execute('CREATE TABLE produits (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT NOT NULL COLLATE NOCASE, quantite INTEGER DEFAULT 0, prix_unitaire NUMERIC DEFAULT 0.0, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
-    await db.execute('CREATE TABLE ventes (id INTEGER PRIMARY KEY AUTOINCREMENT, id_transaction TEXT, produit_id INTEGER, nom_produit TEXT, nom_client TEXT, quantite_vendue INTEGER, prix_total NUMERIC, date_vente TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
+    await db.execute('CREATE TABLE produits (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT NOT NULL COLLATE NOCASE, quantite INTEGER DEFAULT 0, prix_unitaire REAL DEFAULT 0.0, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
+    await db.execute('CREATE TABLE ventes (id INTEGER PRIMARY KEY AUTOINCREMENT, id_transaction TEXT, produit_id INTEGER, nom_produit TEXT, nom_client TEXT, quantite_vendue INTEGER, prix_total REAL, date_vente TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
     await db.execute('CREATE TABLE mouvements (id INTEGER PRIMARY KEY AUTOINCREMENT, produit_id INTEGER, nom_produit TEXT, quantite INTEGER, type TEXT, date_mouvement TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
     await db.execute('''CREATE TABLE utilisateurs (
       idUser INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -67,14 +78,19 @@ class DatabaseHelper {
     await db.execute("CREATE INDEX idx_prod_depot ON produits (depot_id)");
   }
 
+
+
   // --- SYNCHRONISATION ---
+
   Future<int> getUnsyncedCount() async {
     Database db = await database;
     int count = 0;
     final List<String> tables = ['magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'];
     for (String table in tables) {
-      var res = await db.rawQuery('SELECT COUNT(*) as total FROM $table WHERE is_synced = 0');
-      count += Sqflite.firstIntValue(res) ?? 0;
+      try {
+        var res = await db.rawQuery('SELECT COUNT(*) as total FROM $table WHERE is_synced = 0');
+        count += Sqflite.firstIntValue(res) ?? 0;
+      } catch (e) { debugPrint("Erreur comptage table $table: $e"); }
     }
     return count;
   }
@@ -83,103 +99,78 @@ class DatabaseHelper {
     final List<String> tables = ['magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'];
     Database db = await database;
     Map<String, List<Map<String, dynamic>>> payload = {};
+
     for (String table in tables) {
       List<Map<String, dynamic>> unsynced = await db.query(table, where: 'is_synced = ?', whereArgs: [0]);
       if (unsynced.isNotEmpty) payload[table] = unsynced;
     }
+
     if (payload.isEmpty) return true;
-    try {
-      final response = await http.post(Uri.parse('$_apiUrl/sync/push'), headers: {"Content-Type": "application/json"}, body: jsonEncode(payload)).timeout(const Duration(seconds: 20));
-      if (response.statusCode == 200) {
-        for (String table in payload.keys) {
-          await db.update(table, {'is_synced': 1}, where: 'is_synced = ?', whereArgs: [0]);
-        }
-        return true;
+
+    bool success = await RemoteService().syncToCloud(payload);
+    if (success) {
+      for (String table in payload.keys) {
+        await db.update(table, {'is_synced': 1}, where: 'is_synced = ?', whereArgs: [0]);
       }
-      return false;
-    } catch (e) { return false; }
+      return true;
+    }
+    return false;
   }
 
   Future<void> fetchAllFromServer(int magasinId) async {
     Database db = await database;
     String lastSync = await AuthService.getLastSyncDate(); 
-    try {
-      final response = await http.get(Uri.parse('$_apiUrl/sync/pull?since=$lastSync&magasin_id=$magasinId')).timeout(const Duration(seconds: 20));
-      if (response.statusCode == 200) {
-        Map<String, dynamic> remoteData = jsonDecode(response.body);
-        await db.transaction((txn) async {
-          for (String table in remoteData.keys) {
-            List<dynamic> rows = remoteData[table];
-            for (var row in rows) {
-              await txn.insert(table, {...row, 'is_synced': 1}, conflictAlgorithm: ConflictAlgorithm.replace);
-            }
+    Map<String, dynamic>? remoteData = await RemoteService().fetchFromCloud(magasinId, lastSync);
+    
+    if (remoteData != null) {
+      await db.transaction((txn) async {
+        for (String table in remoteData.keys) {
+          List<dynamic> rows = remoteData[table];
+          for (var row in rows) {
+            await txn.insert(table, {...row, 'is_synced': 1}, conflictAlgorithm: ConflictAlgorithm.replace);
           }
-        });
-        await AuthService.setLastSyncDate(DateTime.now().toIso8601String());
-      }
-    } catch (e) { debugPrint("Erreur PULL: $e"); }
+        }
+      });
+      await AuthService.setLastSyncDate(DateTime.now().toIso8601String());
+    }
   }
 
-  // --- DEPOTS ---
+  // --- MAGASINS ET DEPOTS ---
+
+  Future<int> addMagasin(String nom) async {
+    Database db = await database;
+    return await db.transaction((txn) async {
+      int magId = await txn.insert('magasins', {'nomMagasin': nom, 'is_synced': 0});
+      await txn.insert('depots', {'nomDepot': nom, 'magasin_id': magId, 'is_synced': 0});
+      return magId;
+    });
+  }
+
   Future<int> addDepot(String nom, int magasinId) async {
     Database db = await database;
     return await db.insert('depots', {'nomDepot': nom, 'magasin_id': magasinId, 'is_synced': 0});
   }
 
-  Future<List<Map<String, dynamic>>> getDepots(int magasinId) async {
-    Database db = await database;
-    return await db.query('depots', where: 'magasin_id = ?', whereArgs: [magasinId], orderBy: 'nomDepot ASC');
-  }
+
 
   // --- UTILISATEURS ---
 
-  Future<int> register({
-    required String nom,
-    required String mdp,
-    required String niveau,
-    required String nomMagasin // C'est ici que l'on reçoit le nom de la boutique/dépôt
-  }) async {
+  Future<int> register({required String nom, required String mdp, required String niveau, required String nomMagasin}) async {
     Database db = await database;
     return await db.transaction((txn) async {
       int magasinId;
-
-      if (niveau == 'boss') {
-        // 1. Création du magasin avec le nom de l'entreprise (nomMagasin)
-        // Note: La contrainte UNIQUE sur nomMagasin empêche deux boutiques d'avoir le même nom
-        magasinId = await txn.insert('magasins', {
-          'nomMagasin': nomMagasin,
-          'is_synced': 0
-        });
-
-
-
-      } else {
-        // Logique pour le vendeur : il cherche le magasin par son nom
-        List<Map<String, dynamic>> resMag = await txn.query(
-            'magasins',
-            where: 'nomMagasin = ?',
-            whereArgs: [nomMagasin]
-        );
-
-        if (resMag.isEmpty) {
-          throw Exception("La boutique '$nomMagasin' n'existe pas. Vérifiez la boutique saisie par votre boss.");
-        }
+      List<Map<String, dynamic>> resMag = await txn.query('magasins', where: 'nomMagasin = ?', whereArgs: [nomMagasin]);
+      if (resMag.isNotEmpty) {
         magasinId = resMag.first['idMagasin'] as int;
+      } else {
+        magasinId = await txn.insert('magasins', {'nomMagasin': nomMagasin, 'is_synced': 0});
+        await txn.insert('depots', {'nomDepot': nomMagasin, 'magasin_id': magasinId, 'is_synced': 0});
       }
-
-      // 3. Création de l'utilisateur lié au magasin
-      // 'nom' est le login de l'utilisateur, 'nomMagasin' est le nom de son entité
       return await txn.insert('utilisateurs', {
-        'nomUser': nom,
-        'motDePasse': mdp,
-        'niveauUser': niveau,
-        'UserState': (niveau == 'boss') ? 1 : 0,
-        'magasin_id': magasinId,
-        'is_synced': 0,
+        'nomUser': nom, 'motDePasse': mdp, 'niveauUser': niveau, 'UserState': (niveau == 'boss') ? 1 : 0, 'magasin_id': magasinId, 'is_synced': 0,
       });
     });
   }
-
 
   Future<Map<String, dynamic>?> login(String nom, String mdp) async {
     Database db = await database;
@@ -208,6 +199,7 @@ class DatabaseHelper {
   }
 
   // --- STOCK ---
+
   Future<List<Map<String, dynamic>>> getProduits(int? depotId, {int? magasinId}) async {
     Database db = await database;
     if (depotId != null) {
@@ -249,7 +241,8 @@ class DatabaseHelper {
     return await db.delete('produits', where: 'id = ?', whereArgs: [id]);
   }
 
-  // --- STATS ET VENTES ---
+  // --- STATISTIQUES ET VENTES ---
+
   Future<Map<String, double>> getStatistiques(int? depotId, {int? magasinId}) async {
     final db = await database;
     String filter;
@@ -257,6 +250,7 @@ class DatabaseHelper {
     if (depotId != null) { filter = "depot_id = ?"; args.add(depotId); }
     else if (magasinId != null) { filter = "depot_id IN (SELECT idDepot FROM depots WHERE magasin_id = ?)"; args.add(magasinId); }
     else return {'stock': 0, 'recette_jour': 0, 'recette_mois': 0};
+    
     var stockRes = await db.rawQuery("SELECT SUM(quantite * prix_unitaire) as total FROM produits WHERE $filter", args);
     double stock = (stockRes.first['total'] as num?)?.toDouble() ?? 0.0;
     var jourRes = await db.rawQuery("SELECT SUM(prix_total) as total FROM ventes WHERE $filter AND date(date_vente) = date('now', 'localtime')", args);
@@ -296,21 +290,33 @@ class DatabaseHelper {
     return [];
   }
 
-  Future<List<Map<String, dynamic>>> getRapportGlobal(int? depotId, {int? magasinId}) async {
+  Future<List<Map<String, dynamic>>> getRapportGlobal({int? depotId, int? magasinId}) async {
     Database db = await database;
     String filter;
     List<dynamic> args = [];
     if (depotId != null) { filter = "depot_id = ?"; args = [depotId, depotId]; }
     else if (magasinId != null) { filter = "depot_id IN (SELECT idDepot FROM depots WHERE magasin_id = ?)"; args = [magasinId, magasinId]; }
     else return [];
-    return await db.rawQuery('''SELECT v.nom_produit, v.quantite_vendue as quantite, 'VENTE' as type, v.date_vente as date, d.nomDepot FROM ventes v JOIN depots d ON v.depot_id = d.idDepot WHERE v.$filter UNION ALL SELECT m.nom_produit, m.quantite, m.type, m.date_mouvement as date, d.nomDepot FROM mouvements m JOIN depots d ON m.depot_id = d.idDepot WHERE m.$filter ORDER BY date DESC''', args);
+
+    return await db.rawQuery('''
+      SELECT v.nom_produit, v.quantite_vendue as quantite, 'VENTE' as type, v.date_vente as date, d.nomDepot 
+      FROM ventes v JOIN depots d ON v.depot_id = d.idDepot WHERE v.$filter 
+      UNION ALL 
+      SELECT m.nom_produit, m.quantite, m.type, m.date_mouvement as date, d.nomDepot 
+      FROM mouvements m JOIN depots d ON m.depot_id = d.idDepot WHERE m.$filter 
+      ORDER BY date DESC
+    ''', args);
   }
+
+  // --- BACKUP ---
 
   static Future<void> sauvegarderBaseVersGmail() async {
     try {
       var databasesPath = await getDatabasesPath();
       String path = join(databasesPath, 'MaGestion.db');
-      if (await File(path).exists()) { await Share.shareXFiles([XFile(path)], subject: 'Sauvegarde Boutique'); }
+      if (await File(path).exists()) {
+        await Share.shareXFiles([XFile(path)], subject: 'Sauvegarde Boutique');
+      }
     } catch (e) { debugPrint("Erreur export : $e"); }
   }
 }

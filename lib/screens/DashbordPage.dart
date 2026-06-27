@@ -8,6 +8,8 @@ import 'historique_ventes.dart';
 import 'RapportPage.dart';
 import 'UserManagementPage.dart';
 import 'login_page.dart';
+import '../models/configuration.dart';
+import 'package:http/http.dart' as http;
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -19,7 +21,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   late Future<Map<String, double>> _statsFuture;
   int? _magasinId;
-  int? _selectedFilterDepotId; 
+  int? _selectedFilterDepotId;
   List<Map<String, dynamic>> _allDepots = [];
   String _role = "vendeur";
   bool _isSyncing = false;
@@ -38,7 +40,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final int? magId = await AuthService.getMagasinId();
     final int? depId = await AuthService.getDepotId();
     final String role = await AuthService.getRole();
-    
+
     if (magId == null) {
       if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
@@ -68,7 +70,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void _refreshStats() {
     setState(() {
       _statsFuture = DatabaseHelper().getStatistiques(
-        _selectedFilterDepotId, 
+        _selectedFilterDepotId,
         magasinId: _magasinId
       );
     });
@@ -85,7 +87,7 @@ class _DashboardPageState extends State<DashboardPage> {
       if (mounted) {
         setState(() {
           _isSyncing = false;
-          _refreshKey++; 
+          _refreshKey++;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("✅ Statistiques synchronisées !"), backgroundColor: Colors.green),
@@ -101,23 +103,84 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  void _afficherConfiguration() {
+    Config currentConfig = Config(
+        configurationTableFile: "'magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'",
+        fileName: 'MaGestion.db',
+        body: 'Liaison avec le serveur distant',
+        apiUrl: 'http://afrisofttech-002-site50.jtempurl.com/'
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Configuration du Serveur"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("URL de l'API :", style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(currentConfig.apiUrl, style: const TextStyle(color: Colors.blue, fontSize: 13)),
+            const SizedBox(height: 10),
+            Text("Base locale : ${currentConfig.fileName}"),
+            const SizedBox(height: 10),
+            Text("Statut : ${currentConfig.body}"),
+          ],
+        ),
+        actions: [
+          ElevatedButton.icon(
+            icon: const Icon(Icons.sync_alt),
+            label: const Text("Vérifier Liaison"),
+            onPressed: () async {
+              try {
+                final response = await http.get(Uri.parse(currentConfig.apiUrl)).timeout(const Duration(seconds: 10));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Connecté au serveur API (${response.statusCode})"), backgroundColor: Colors.green)
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Erreur : Impossible de contacter l'API"), backgroundColor: Colors.red)
+                  );
+                }
+              }
+            },
+          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fermer")),
+        ],
+      ),
+    );
+  }
+
   void _ouvrirNouveauMagasin() {
     final nomController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Nouveau Magasin"),
-        content: TextField(controller: nomController, decoration: const InputDecoration(labelText: "Nom de l'entreprise")),
+        content: TextField(
+            controller: nomController,
+            decoration: const InputDecoration(labelText: "Nom de l'entreprise")
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
           ElevatedButton(
             onPressed: () async {
               if (nomController.text.isNotEmpty) {
-                await DatabaseHelper().addMagasin(nomController.text);
+                await DatabaseHelper().register(
+                    nom: nomController.text,
+                    mdp: "1234",
+                    niveau: 'boss',
+                    nomMagasin: nomController.text
+                );
                 if (!mounted) return;
                 Navigator.pop(context);
                 _initData();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Magasin créé")));
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Magasin et Dépôt créés avec succès"))
+                );
               }
             },
             child: const Text("Créer"),
@@ -177,20 +240,29 @@ class _DashboardPageState extends State<DashboardPage> {
                 ],
               ),
             ),
-            ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
+
             ListTile(leading: const Icon(Icons.shopping_cart, color: Colors.green), title: const Text("Vendre"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ListeArticles())); }),
             ListTile(leading: const Icon(Icons.history, color: Colors.orange), title: const Text("Historique"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoriqueVentes())); }),
             const Divider(),
             ListTile(leading: const Icon(Icons.dashboard, color: Colors.blue), title: const Text("Tableau de Bord"), onTap: () => Navigator.pop(context)),
             if (_role == 'boss') ...[
+              ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
                ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
                ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
             ],
             ListTile(leading: const Icon(Icons.analytics), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Colors.blueGrey),
+              title: const Text("Configuration API"),
+              onTap: () {
+                Navigator.pop(context);
+                _afficherConfiguration();
+              }
+            ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.grey), 
-              title: const Text("Déconnexion"), 
+              leading: const Icon(Icons.logout, color: Colors.grey),
+              title: const Text("Déconnexion"),
               onTap: () async {
                 bool confirm = await showDialog(
                   context: context,
@@ -281,7 +353,7 @@ class _DashboardPageState extends State<DashboardPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1), 
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: color),
       ),

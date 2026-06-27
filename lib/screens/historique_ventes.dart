@@ -10,6 +10,8 @@ import 'DashbordPage.dart';
 import 'RapportPage.dart';
 import 'UserManagementPage.dart';
 import 'login_page.dart';
+import '../models/configuration.dart';
+import 'package:http/http.dart' as http;
 
 class HistoriqueVentes extends StatefulWidget {
   const HistoriqueVentes({super.key});
@@ -108,6 +110,56 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
         );
       }
     }
+  }
+
+  void _afficherConfiguration() {
+    Config currentConfig = Config(
+        configurationTableFile: "'magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'",
+        fileName: 'MaGestion.db',
+        body: 'Liaison avec le serveur distant',
+        apiUrl: 'http://afrisofttech-002-site50.jtempurl.com/'
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Configuration du Serveur"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            const SizedBox(height: 10),
+            Text("Base locale : ${currentConfig.fileName}"),
+            const SizedBox(height: 10),
+            Text("Statut : ${currentConfig.body}"),
+          ],
+        ),
+        actions: [
+          ElevatedButton.icon(
+            icon: const Icon(Icons.sync_alt),
+            label: const Text("Vérifier Liaison"),
+            onPressed: () async {
+              try {
+                final response = await http.get(Uri.parse(currentConfig.apiUrl)).timeout(const Duration(seconds: 10));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Connecté au serveur API (${response.statusCode})"), backgroundColor: Colors.green)
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Erreur : Impossible de contacter l'API"), backgroundColor: Colors.red)
+                  );
+                }
+              }
+            },
+          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fermer")),
+        ],
+      ),
+    );
   }
 
   void _ouvrirNouveauMagasin() {
@@ -287,16 +339,25 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
                 ],
               ),
             ),
-            ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
+
             ListTile(leading: const Icon(Icons.shopping_cart, color: Colors.green), title: const Text("Vendre"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ListeArticles())); }),
             ListTile(leading: const Icon(Icons.history, color: Colors.orange), title: const Text("Historique"), onTap: () => Navigator.pop(context)),
             const Divider(),
             ListTile(leading: const Icon(Icons.dashboard), title: const Text("Tableau de Bord"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardPage())); }),
             if (_role == 'boss') ...[
+              ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
                ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
                ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
             ],
             ListTile(leading: const Icon(Icons.analytics), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Colors.blueGrey),
+              title: const Text("Configuration API"),
+              onTap: () {
+                Navigator.pop(context);
+                _afficherConfiguration();
+              }
+            ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.grey), 

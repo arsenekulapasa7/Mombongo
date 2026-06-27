@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../utilis/auth_service.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert'; // Pour décoder le JSON
 
 class UserManagementPage extends StatefulWidget {
   const UserManagementPage({super.key});
@@ -15,6 +13,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   List<Map<String, dynamic>> _depots = [];
   int? _magasinId;
   bool _isLoading = true;
+  int _refreshKey = 0;
 
   @override
   void initState() {
@@ -36,9 +35,38 @@ class _UserManagementPageState extends State<UserManagementPage> {
     
     setState(() {
       _magasinId = magId;
-      _depots = depots;
+      _depots = List.from(depots); 
       _isLoading = false;
+      _refreshKey++;
     });
+  }
+
+  void _creerNouveauDepot() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Nouveau Point de Vente"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: "Nom du dépôt / point de vente"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              if (controller.text.isNotEmpty && _magasinId != null) {
+                await DatabaseHelper().addDepot(controller.text, _magasinId!);
+                if (!mounted) return;
+                Navigator.pop(context);
+                _loadData();
+              }
+            },
+            child: const Text("Créer"),
+          ),
+        ],
+      ),
+    );
   }
 
   void _changerDepot(Map<String, dynamic> user) async {
@@ -50,7 +78,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         builder: (context, setDialogState) => AlertDialog(
           title: const Text("Assigner à un dépôt"),
           content: DropdownButtonFormField<int>(
-            initialValue: selectedDepotId, // Correction : initialValue au lieu de value
+            value: _depots.any((d) => d['idDepot'] == selectedDepotId) ? selectedDepotId : null,
             items: _depots.map((d) => DropdownMenuItem(
               value: d['idDepot'] as int,
               child: Text(d['nomDepot']),
@@ -86,93 +114,102 @@ class _UserManagementPageState extends State<UserManagementPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Gestion des Utilisateurs"),
+        title: const Text("Vendeurs & Dépôts"),
         backgroundColor: Colors.blue.shade800,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_business),
+            onPressed: _creerNouveauDepot,
+            tooltip: "Ajouter un dépôt",
+          )
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : FutureBuilder<List<Map<String, dynamic>>>(
-              future: DatabaseHelper().getUtilisateurs(_magasinId!),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                
-                final users = snapshot.data ?? [];
-                if (users.isEmpty) return const Center(child: Text("Aucun utilisateur trouvé"));
+          : RefreshIndicator(
+              onRefresh: () async => _loadData(),
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                key: ValueKey(_refreshKey),
+                future: DatabaseHelper().getUtilisateurs(_magasinId!),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  
+                  final users = snapshot.data ?? [];
+                  if (users.isEmpty) return const Center(child: Text("Aucun utilisateur trouvé"));
 
-                return ListView.builder(
-                  itemCount: users.length,
-                  itemBuilder: (context, index) {
-                    final user = users[index];
-                    bool isActive = user['UserState'] == 1;
-                    String nomDepot = user['nomDepot'] ?? "Aucun dépôt";
+                  return ListView.builder(
+                    itemCount: users.length,
+                    itemBuilder: (context, index) {
+                      final user = users[index];
+                      bool isActive = user['UserState'] == 1;
+                      String nomDepot = user['nomDepot'] ?? "Non assigné";
 
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: isActive ? Colors.green.shade100 : Colors.grey.shade200,
-                          child: Icon(
-                            user['niveauUser'] == 'boss' ? Icons.admin_panel_settings : Icons.person,
-                            color: isActive ? Colors.green : Colors.grey,
-                          ),
+                      return Dismissible(
+                        key: ValueKey(user['idUser']),
+                        direction: user['niveauUser'] != 'boss' ? DismissDirection.endToStart : DismissDirection.none,
+                        background: Container(
+                          color: Colors.red,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: const Icon(Icons.delete, color: Colors.white),
                         ),
-                        title: Text("${user['nomUser']} (${user['niveauUser']})", style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Dépôt: $nomDepot"),
-                            Text(isActive ? "État : Actif" : "État : En attente", 
-                                 style: TextStyle(color: isActive ? Colors.green : Colors.orange, fontSize: 12)),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!isActive)
-                              IconButton(
-                                icon: const Icon(Icons.check_circle, color: Colors.green),
-                                onPressed: () async {
-                                  await DatabaseHelper().validerUtilisateur(user['idUser']);
-                                  _loadData();
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text("Utilisateur activé !"))
-                                  );
-                                },
-                              ),
-                            if (user['niveauUser'] != 'boss')
-                              IconButton(
-                                icon: const Icon(Icons.warehouse, color: Colors.brown),
-                                tooltip: "Changer de dépôt",
-                                onPressed: () => _changerDepot(user),
-                              ),
-                          ],
-                        ),
-                        onLongPress: user['nomUser'] != 'admin' ? () async {
-                          bool? confirm = await showDialog(
+                        confirmDismiss: (direction) async {
+                          return await showDialog(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text("Supprimer ?"),
-                              content: Text("Voulez-vous supprimer l'utilisateur ${user['nomUser']} ?"),
+                              title: const Text("Supprimer l'utilisateur"),
+                              content: Text("Voulez-vous vraiment supprimer ${user['nomUser']} ?"),
                               actions: [
                                 TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
                                 TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
                               ],
                             ),
                           );
-                          if (confirm == true) {
-                            await DatabaseHelper().supprimerUtilisateur(user['idUser']);
-                            _loadData();
-                          }
-                        } : null,
-                      ),
-                    );
-                  },
-                );
-              },
+                        },
+                        onDismissed: (direction) async {
+                          await DatabaseHelper().supprimerUtilisateur(user['idUser']);
+                          _loadData();
+                        },
+                        child: Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: isActive ? Colors.green.shade100 : Colors.grey.shade200,
+                              child: Icon(
+                                user['niveauUser'] == 'boss' ? Icons.admin_panel_settings : Icons.person,
+                                color: isActive ? Colors.green : Colors.grey,
+                              ),
+                            ),
+                            title: Text("${user['nomUser']}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text("Dépôt : $nomDepot"),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (!isActive)
+                                  IconButton(
+                                    icon: const Icon(Icons.check_circle, color: Colors.green),
+                                    onPressed: () async {
+                                      await DatabaseHelper().validerUtilisateur(user['idUser']);
+                                      _loadData();
+                                    },
+                                  ),
+                                if (user['niveauUser'] != 'boss')
+                                  IconButton(
+                                    icon: const Icon(Icons.warehouse, color: Colors.brown),
+                                    onPressed: () => _changerDepot(user),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
     );
   }

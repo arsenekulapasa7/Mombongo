@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:my_business/database/database_helper.dart';
 import 'package:my_business/models/articles.dart';
 import 'package:my_business/screens/RapportPage.dart';
@@ -9,6 +11,7 @@ import 'package:my_business/screens/UserManagementPage.dart';
 import 'package:my_business/screens/liste_articles.dart';
 import 'package:my_business/screens/historique_ventes.dart';
 import 'package:my_business/utilis/sync_service.dart';
+import '../models/configuration.dart';
 
 class StockPage extends StatefulWidget {
   const StockPage({super.key});
@@ -41,7 +44,7 @@ class _StockPageState extends State<StockPage> {
     final magId = await AuthService.getMagasinId();
     final roleRaw = await AuthService.getRole();
     final role = roleRaw.toLowerCase().trim();
-    
+
     if (magId == null) {
        if (!mounted) return;
        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
@@ -49,11 +52,13 @@ class _StockPageState extends State<StockPage> {
     }
 
     final List<Map<String, dynamic>> depots = await DatabaseHelper().getDepots(magId);
-    
+
     String nomDep = "Mon Dépôt";
     if (depId != null) {
-      final found = depots.firstWhere((d) => d['idDepot'] == depId, orElse: () => {});
-      if (found.isNotEmpty) nomDep = found['nomDepot'];
+      final found = depots.any((d) => d['idDepot'] == depId);
+      if (found) {
+        nomDep = depots.firstWhere((d) => d['idDepot'] == depId)['nomDepot'];
+      }
     }
 
     if (!mounted) return;
@@ -76,92 +81,150 @@ class _StockPageState extends State<StockPage> {
   }
 
   Future<void> _handleSync() async {
+    await startSynchronization();
+  }
+
+  Future<void> startSynchronization() async {
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
 
+    final url = Uri.parse('http://afrisofttech-002-site50.jtempurl.com/api/SynchronizeSync/Synchronization');
+
     try {
-      // 1. Exécute la synchronisation (PUSH et PULL)
-      await SyncService().synchronizeData();
+      final db = await DatabaseHelper().database;
+      final List<String> tables = ['magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'];
+      Map<String, List<Map<String, dynamic>>> payload = {};
 
-      // 2. RECOMPTE les éléments non synchronisés (qui devrait être 0 maintenant)
-      int count = await DatabaseHelper().getUnsyncedCount();
+      for (String table in tables) {
+        List<Map<String, dynamic>> unsynced = await db.query(table, where: 'is_synced = ?', whereArgs: [0]);
+        if (unsynced.isNotEmpty) {
+          payload[table] = unsynced;
+        }
+      }
 
-      if (mounted) {
-        setState(() {
-          _unsyncedCount = count; // Mise à jour du badge à 0
-          _isSyncing = false;
-          _refreshKey++; // Rafraîchit la liste à l'écran
-        });
+      if (payload.isEmpty) {
+        await SyncService().synchronizeData(); 
+        await _checkUnsynced();
+        if (mounted) {
+          setState(() { _isSyncing = false; _refreshKey++; });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Vos données sont déjà à jour.")));
+        }
+        return;
+      }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Synchronisation réussie !"), backgroundColor: Colors.green),
-        );
+      final Map<String, dynamic> requestBody = {
+        "serverConnexionString": "Data Source=SQL5083.site4now.net;Initial Catalog=db_a54efd_synchronizedb;User Id=db_a54efd_synchronizedb_admin;Password=12345678GL;Encrypt=True;TrustServerCertificate=True",
+        "localDb": "MaGestion.db",
+        "fileName": "MaGestion.db",
+        "body": payload 
+      };
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        for (String table in payload.keys) {
+          await db.update(table, {'is_synced': 1}, where: 'is_synced = ?', whereArgs: [0]);
+        }
+        if (_magasinId != null) await SyncService().synchronizeData(); 
+        await _checkUnsynced();
+        if (mounted) {
+          setState(() { _isSyncing = false; _refreshKey++; });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ SYNCHRONISATION RÉUSSIE !"), backgroundColor: Colors.green));
+        }
+      } else {
+        throw Exception("Erreur serveur (${response.statusCode})");
       }
     } catch (e) {
-      if (mounted) setState(() => _isSyncing = false);
-      // ... gestion erreur ...
+      if (mounted) {
+        setState(() => _isSyncing = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("🚨 ÉCHEC SYNC : $e"), backgroundColor: Colors.red));
+      }
     }
   }
 
-  void _ouvrirNouveauMagasin() {
-    final nomController = TextEditingController();
+  void _afficherConfiguration() {
+    Config currentConfig = Config(
+        configurationTableFile: "'magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'",
+        fileName: 'MaGestion.db',
+        body: 'Système relié à l\'API',
+        apiUrl: 'http://afrisofttech-002-site50.jtempurl.com'
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Nouveau Magasin"),
-        content: TextField(controller: nomController, decoration: const InputDecoration(labelText: "Nom de l'entreprise")),
+        title: const Text("Configuration du Serveur"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Text("Base locale : ${currentConfig.fileName}"),
+            const SizedBox(height: 10),
+            const Text("URL API :", style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(currentConfig.apiUrl, style: const TextStyle(fontSize: 12, color: Colors.blue)),
+            const SizedBox(height: 10),
+            Text("Statut : ${currentConfig.body}"),
+          ],
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
-          ElevatedButton(
+          ElevatedButton.icon(
+            icon: const Icon(Icons.sync_alt),
+            label: const Text("Vérifier Liaison"),
             onPressed: () async {
-              if (nomController.text.isNotEmpty) {
-                await DatabaseHelper().addMagasin(nomController.text);
-                if (!mounted) return;
-                Navigator.pop(context);
-                _loadUserData();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Magasin créé")));
+              try {
+                final response = await http.get(Uri.parse(currentConfig.apiUrl)).timeout(const Duration(seconds: 10));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Serveur contacté (${response.statusCode})"), backgroundColor: Colors.green));
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Impossible de contacter le serveur"), backgroundColor: Colors.red));
+                }
               }
             },
-            child: const Text("Créer"),
           ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fermer")),
         ],
       ),
     );
   }
 
   void _ouvrirFormulaireAjout(BuildContext context) {
+    if (_role != 'boss') return;
+
     final nomController = TextEditingController();
     final qteController = TextEditingController();
     final prixController = TextEditingController();
 
-    int? targetDepotId = _selectedFilterDepotId ??
-        (_allDepots.isNotEmpty ? _allDepots[0]['idDepot'] : _currentDepotId);
+    int? targetDepotId = _selectedFilterDepotId ?? (_allDepots.isNotEmpty ? _allDepots[0]['idDepot'] : _currentDepotId);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-              left: 20, right: 20, top: 20),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text("Nouvel Article", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              if (_role == 'boss')
-                DropdownButtonFormField<int>(
-                  value: targetDepotId,
-                  decoration: const InputDecoration(labelText: "Dépôt de destination"),
-                  items: _allDepots.map((d) => DropdownMenuItem<int>(
-                        value: d['idDepot'] as int,
-                        child: Text(d['nomDepot'] as String)
-                    )).toList(),
-                  onChanged: (val) => setModalState(() => targetDepotId = val),
-                ),
-              TextField(controller: nomController, decoration: const InputDecoration(labelText: "Nom de l'article")),
-              TextField(controller: qteController, decoration: const InputDecoration(labelText: "Quantité initiale"), keyboardType: TextInputType.number),
-              TextField(controller: prixController, decoration: const InputDecoration(labelText: "Prix Unitaire (USD)"), keyboardType: TextInputType.number),
+              DropdownButtonFormField<int>(
+                value: targetDepotId,
+                decoration: const InputDecoration(labelText: "Dépôt"),
+                items: _allDepots.map((d) => DropdownMenuItem<int>(value: d['idDepot'] as int, child: Text(d['nomDepot'] as String))).toList(),
+                onChanged: (val) => setModalState(() => targetDepotId = val),
+              ),
+              TextField(controller: nomController, decoration: const InputDecoration(labelText: "Nom")),
+              TextField(controller: qteController, decoration: const InputDecoration(labelText: "Quantité"), keyboardType: TextInputType.number),
+              TextField(controller: prixController, decoration: const InputDecoration(labelText: "Prix (USD)"), keyboardType: TextInputType.number),
               const SizedBox(height: 20),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 45)),
@@ -188,12 +251,14 @@ class _StockPageState extends State<StockPage> {
   }
 
   void _ouvrirReappro(BuildContext context, Article art) {
+    if (_role != 'boss') return;
+
     final reapproController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text("Réapprovisionner ${art.nom}"),
-        content: TextField(controller: reapproController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Quantité à ajouter")),
+        content: TextField(controller: reapproController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Quantité")),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
           ElevatedButton(
@@ -221,33 +286,19 @@ class _StockPageState extends State<StockPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Gestion du Stock"),
+        title: const Text("Gestion Stock"),
         backgroundColor: Colors.blue.shade800,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.save_alt),
-            onPressed: () => DatabaseHelper.sauvegarderBaseVersGmail(),
-          ),
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: _isSyncing
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.cloud_upload),
+                icon: _isSyncing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.cloud_upload),
                 onPressed: _isSyncing ? null : _handleSync,
               ),
               if (_unsyncedCount > 0 && !_isSyncing)
-                Positioned(
-                  right: 8, top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text('$_unsyncedCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  ),
-                ),
+                Positioned(right: 8, top: 8, child: CircleAvatar(radius: 8, backgroundColor: Colors.red, child: Text('$_unsyncedCount', style: const TextStyle(color: Colors.white, fontSize: 8)))),
             ],
           ),
         ],
@@ -270,12 +321,13 @@ class _StockPageState extends State<StockPage> {
             ListTile(leading: const Icon(Icons.shopping_cart, color: Colors.green), title: const Text("Vendre"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const ListeArticles())); }),
             ListTile(leading: const Icon(Icons.history, color: Colors.orange), title: const Text("Historique"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoriqueVentes())); }),
             const Divider(),
-            ListTile(leading: const Icon(Icons.dashboard), title: const Text("Tableau de Bord"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardPage())); }),
             if (_role == 'boss') ...[
-               ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
-              ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
+               ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
+               const Divider(),
             ],
-            ListTile(leading: const Icon(Icons.analytics), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
+            ListTile(leading: const Icon(Icons.dashboard, color: Colors.blue), title: const Text("Dashboard"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardPage())); }),
+            ListTile(leading: const Icon(Icons.analytics, color: Colors.purple), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
+            ListTile(leading: const Icon(Icons.settings, color: Colors.blueGrey), title: const Text("Configuration"), onTap: () { Navigator.pop(context); _afficherConfiguration(); }),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.grey), 
@@ -309,20 +361,17 @@ class _StockPageState extends State<StockPage> {
               padding: const EdgeInsets.all(8.0),
               child: DropdownButtonFormField<int?>(
                 value: _selectedFilterDepotId,
-                decoration: const InputDecoration(labelText: "Filtrer par Dépôt", border: OutlineInputBorder()),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text("Global (Mon Magasin)")),
+                  const DropdownMenuItem(value: null, child: Text("Global")),
                   ..._allDepots.map((d) => DropdownMenuItem(value: d['idDepot'] as int, child: Text(d['nomDepot'] as String))),
                 ],
                 onChanged: (val) { setState(() { _selectedFilterDepotId = val; _refreshKey++; }); },
+                decoration: const InputDecoration(labelText: "Filtrer par Dépôt", border: OutlineInputBorder()),
               ),
             ),
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              onChanged: (v) => setState(() => _searchQuery = v),
-              decoration: const InputDecoration(labelText: "Rechercher", prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
-            ),
+            child: TextField(onChanged: (v) => setState(() => _searchQuery = v), decoration: const InputDecoration(labelText: "Rechercher", prefixIcon: Icon(Icons.search), border: OutlineInputBorder())),
           ),
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
@@ -331,20 +380,43 @@ class _StockPageState extends State<StockPage> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Aucun article."));
-
-                final displayList = snapshot.data!.where((item) => item['nom'].toString().toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-
+                
+                final list = snapshot.data!.where((item) => item['nom'].toString().toLowerCase().contains(_searchQuery.toLowerCase())).toList();
                 return ListView.builder(
-                  itemCount: displayList.length,
+                  itemCount: list.length,
                   itemBuilder: (context, index) {
-                    final item = displayList[index];
+                    final item = list[index];
                     final art = Article.fromMap(item);
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    return Dismissible(
+                      key: ValueKey(art.id),
+                      direction: _role == 'boss' ? DismissDirection.endToStart : DismissDirection.none,
+                      background: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      confirmDismiss: (direction) async {
+                        return await showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text("Confirmer"),
+                            content: const Text("Voulez-vous supprimer cet article ?"),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
+                              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
+                            ],
+                          ),
+                        );
+                      },
+                      onDismissed: (direction) async {
+                        await DatabaseHelper().deleteProduit(art.id!);
+                        _checkUnsynced();
+                      },
                       child: ListTile(
                         title: Text(art.nom, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text("Prix: ${art.prix} USD | Stock: ${art.quantite}"),
-                        trailing: IconButton(icon: const Icon(Icons.add_circle_outline, color: Colors.green), onPressed: () => _ouvrirReappro(context, art)),
+                        trailing: _role == 'boss' ? IconButton(icon: const Icon(Icons.add_circle, color: Colors.green), onPressed: () => _ouvrirReappro(context, art)) : null,
                       ),
                     );
                   },
@@ -354,11 +426,11 @@ class _StockPageState extends State<StockPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: _role == 'boss' ? FloatingActionButton(
+        onPressed: () => _ouvrirFormulaireAjout(context), 
         backgroundColor: Colors.blue.shade800,
-        onPressed: () => _ouvrirFormulaireAjout(context),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+        child: const Icon(Icons.add, color: Colors.white)
+      ) : null,
     );
   }
 }
