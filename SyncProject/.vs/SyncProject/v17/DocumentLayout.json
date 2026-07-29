@@ -1,12 +1,44 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\",
+  "WorkspaceRootPath": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{6E488C11-7127-43C3-A504-244CBA158F3F}|..\\SyncProject.Tests\\SyncProject.Tests.csproj|d:\\pesonalprojects\\mombongo\\mombongo\\syncproject.tests\\synchronizesynctest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject\\data\\dataaccesslayers\\synchronizeaccesslayer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|solutionrelative:data\\dataaccesslayers\\synchronizeaccesslayer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6E488C11-7127-43C3-A504-244CBA158F3F}|..\\SyncProject.Tests\\SyncProject.Tests.csproj|d:\\pesonalprojects\\mombongo\\mombongo\\syncproject.tests\\configurationsynctest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject\\data\\dataaccesslayers\\configurations.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|solutionrelative:data\\dataaccesslayers\\configurations.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|solutionrelative:properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|solutionrelative:appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6E488C11-7127-43C3-A504-244CBA158F3F}|..\\SyncProject.Tests\\SyncProject.Tests.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject.tests\\synchronizesynctest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject\\controllers\\synchronizesynccontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|solutionrelative:controllers\\synchronizesynccontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject\\controllers\\configurationsynccontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|solutionrelative:controllers\\configurationsynccontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject\\dtos\\synchronizedto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E9FB087A-CEB8-87B1-6EAA-E22DBD4F7AFA}|SyncProject.csproj|solutionrelative:dtos\\synchronizedto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6E488C11-7127-43C3-A504-244CBA158F3F}|..\\SyncProject.Tests\\SyncProject.Tests.csproj|f:\\pesonalprojects\\mombongo\\mombongo\\syncproject.tests\\configurationsynctest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -25,27 +57,127 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "SynchronizeSyncTest.cs",
-              "DocumentMoniker": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject.Tests\\SynchronizeSyncTest.cs",
-              "RelativeDocumentMoniker": "..\\SyncProject.Tests\\SynchronizeSyncTest.cs",
-              "ToolTip": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject.Tests\\SynchronizeSyncTest.cs",
-              "RelativeToolTip": "..\\SyncProject.Tests\\SynchronizeSyncTest.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABUAAAAKAAAAAAAAAA==",
+              "Title": "SynchronizeAccessLayer.cs",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Data\\DataAccessLayers\\SynchronizeAccessLayer.cs",
+              "RelativeDocumentMoniker": "Data\\DataAccessLayers\\SynchronizeAccessLayer.cs",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Data\\DataAccessLayers\\SynchronizeAccessLayer.cs",
+              "RelativeToolTip": "Data\\DataAccessLayers\\SynchronizeAccessLayer.cs",
+              "ViewState": "AgIAABEAAAAAAAAAAAA8wCUAAAAwAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-08T15:54:45.39Z",
+              "WhenOpened": "2026-07-29T11:57:23.952Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 1,
-              "Title": "ConfigurationSyncTest.cs",
-              "DocumentMoniker": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject.Tests\\ConfigurationSyncTest.cs",
-              "RelativeDocumentMoniker": "..\\SyncProject.Tests\\ConfigurationSyncTest.cs",
-              "ToolTip": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject.Tests\\ConfigurationSyncTest.cs",
-              "RelativeToolTip": "..\\SyncProject.Tests\\ConfigurationSyncTest.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAC0AAAA3AAAAAAAAAA==",
+              "Title": "Configurations.cs",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Data\\DataAccessLayers\\Configurations.cs",
+              "RelativeDocumentMoniker": "Data\\DataAccessLayers\\Configurations.cs",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Data\\DataAccessLayers\\Configurations.cs",
+              "RelativeToolTip": "Data\\DataAccessLayers\\Configurations.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-08T14:58:25.354Z",
+              "WhenOpened": "2026-07-29T11:57:16.492Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "launchSettings.json",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Properties\\launchSettings.json",
+              "RelativeDocumentMoniker": "Properties\\launchSettings.json",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Properties\\launchSettings.json",
+              "RelativeToolTip": "Properties\\launchSettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-07-29T11:55:20.463Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\appsettings.json",
+              "RelativeDocumentMoniker": "appsettings.json",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\appsettings.json",
+              "RelativeToolTip": "appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-07-29T11:54:37.323Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "ConfigurationSyncController.cs",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Controllers\\ConfigurationSyncController.cs",
+              "RelativeDocumentMoniker": "Controllers\\ConfigurationSyncController.cs",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Controllers\\ConfigurationSyncController.cs",
+              "RelativeToolTip": "Controllers\\ConfigurationSyncController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAA3AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-29T06:46:06.695Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "SynchronizeSyncController.cs",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Controllers\\SynchronizeSyncController.cs",
+              "RelativeDocumentMoniker": "Controllers\\SynchronizeSyncController.cs",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Controllers\\SynchronizeSyncController.cs",
+              "RelativeToolTip": "Controllers\\SynchronizeSyncController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAA2AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-29T06:45:27.953Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "ConfigurationSyncTest.cs",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject.Tests\\ConfigurationSyncTest.cs",
+              "RelativeDocumentMoniker": "..\\SyncProject.Tests\\ConfigurationSyncTest.cs",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject.Tests\\ConfigurationSyncTest.cs",
+              "RelativeToolTip": "..\\SyncProject.Tests\\ConfigurationSyncTest.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAAACYAAAA0AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-29T06:37:55.47Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Program.cs",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Program.cs",
+              "RelativeDocumentMoniker": "Program.cs",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Program.cs",
+              "RelativeToolTip": "Program.cs",
+              "ViewState": "AgIAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-10T16:18:21.825Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "SynchronizeDto.cs",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Dtos\\SynchronizeDto.cs",
+              "RelativeDocumentMoniker": "Dtos\\SynchronizeDto.cs",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\Dtos\\SynchronizeDto.cs",
+              "RelativeToolTip": "Dtos\\SynchronizeDto.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-29T06:46:49.281Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "SynchronizeSyncTest.cs",
+              "DocumentMoniker": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject.Tests\\SynchronizeSyncTest.cs",
+              "RelativeDocumentMoniker": "..\\SyncProject.Tests\\SynchronizeSyncTest.cs",
+              "ToolTip": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject.Tests\\SynchronizeSyncTest.cs",
+              "RelativeToolTip": "..\\SyncProject.Tests\\SynchronizeSyncTest.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAswBwAAADYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-07-29T06:26:34.408Z",
               "EditorCaption": ""
             }
           ]

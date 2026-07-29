@@ -26,9 +26,9 @@ public class SynchronizeSyncTest : IClassFixture<WebApplicationFactory<Program>>
         // 1. Define your custom C# object
         var myObject = new SynchronizeModel
         {
-            ServerConnexionString = "Data Source=SQL5083.site4now.net;Initial Catalog=db_a54efd_synchronizedb;User Id=db_a54efd_synchronizedb_admin;Password=12345678GL;Encrypt=True;TrustServerCertificate=True;",
+            ServerConnexionString = "Data Source=SQL5083.site4now.net,1433;Initial Catalog=db_a54efd_synchronizedb;User Id=db_a54efd_synchronizedb_admin;Password=12345678GL;Encrypt=True;TrustServerCertificate=True;",
             LocalDb = "table.db",
-            FileName = "tables.txt",
+            FileName = "configuration_tables.txt",
         };
 
         // 2. Serialize the object into a raw JSON string

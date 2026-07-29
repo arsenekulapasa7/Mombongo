@@ -2932,23 +2932,23 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\AFRISOFT\\.nuget\\packages\\": {},
+    "C:\\Users\\yanni\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\SyncProject.csproj",
+      "projectUniqueName": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\SyncProject.csproj",
       "projectName": "SyncProject",
-      "projectPath": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\SyncProject.csproj",
-      "packagesPath": "C:\\Users\\AFRISOFT\\.nuget\\packages\\",
-      "outputPath": "D:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\obj\\",
+      "projectPath": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\SyncProject.csproj",
+      "packagesPath": "C:\\Users\\yanni\\.nuget\\packages\\",
+      "outputPath": "F:\\PesonalProjects\\Mombongo\\Mombongo\\SyncProject\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\AFRISOFT\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\yanni\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -3013,7 +3013,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.314/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.315/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

@@ -1,6 +1,7 @@
 using Dotmim.Sync;
 using Dotmim.Sync.Sqlite;
 using Dotmim.Sync.SqlServer;
+using Microsoft.Data.SqlClient;
 using SyncProject.Dtos;
 using SyncProject.Models;
 
@@ -47,28 +48,50 @@ public static class SynchronizeAccessLayer
             tablesList = configReadTables.ReadAllLines();
         }
 
+        int maxRetries = 4;
+        TimeSpan delay = TimeSpan.FromSeconds(3);
 
-        var setup = new SyncSetup(tablesList);
-
-        var agent = new SyncAgent(clientProvider, serverProvider);
-
-        var progress = new SynchronousProgress<ProgressArgs>(s => 
-                Console.WriteLine($"{s.Context.SyncStage}:\t{s.Message}"));
-
-
-
-        Console.Clear();
-        Console.WriteLine("Sync Start");
-
-        try
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            var syncContext = await agent.SynchronizeAsync(setup, progress);
-            Console.WriteLine(syncContext);
+            try
+            {
+                try
+                {
+                    //await DoSomethingThatMightTimeoutAsync();
+                    var setup = new SyncSetup(tablesList);
+
+                    var agent = new SyncAgent(clientProvider, serverProvider);
+
+                    var progress = new SynchronousProgress<ProgressArgs>(s =>
+                            Console.WriteLine($"{s.Context.SyncStage}:\t{s.Message}"));
+
+
+
+                    Console.Clear();
+                    Console.WriteLine("Sync Start");
+
+
+                    var syncContext = await agent.SynchronizeAsync(setup, progress);
+                    Console.WriteLine(syncContext);
+                    break;
+                }
+                catch (TimeoutException)
+                {
+                    if (attempt == maxRetries) throw;
+
+                    await Task.Delay(delay);
+                }
+            }
+            catch (Exception e)
+            {
+
+                Console.WriteLine(e.Message);
+            }
         }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.Message);
-        }
+
+        
+
+
 
 
         // do
