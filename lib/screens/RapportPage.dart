@@ -21,10 +21,10 @@ class RapportPage extends StatefulWidget {
 class _RapportPageState extends State<RapportPage> {
   bool _isLoading = true;
   int? _magasinId;
-  int? _selectedDepotId; 
+  int? _selectedDepotId;
   List<Map<String, dynamic>> _depots = [];
   String _role = "vendeur";
-  
+
   // Variables pour la synchronisation
   bool _isSyncing = false;
   int _unsyncedCount = 0;
@@ -68,32 +68,7 @@ class _RapportPageState extends State<RapportPage> {
     }
   }
 
-  Future<void> _handleSync() async {
-    if (_isSyncing) return;
-    setState(() => _isSyncing = true);
 
-    try {
-      await SyncService().synchronizeData();
-      await _checkUnsynced();
-      
-      if (mounted) {
-        setState(() {
-          _isSyncing = false;
-          _refreshKey++; 
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Rapport synchronisé !"), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSyncing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("🚨 Échec sync : $e"), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
 
   void _afficherConfiguration() {
     Config currentConfig = Config(
@@ -127,13 +102,13 @@ class _RapportPageState extends State<RapportPage> {
                 final response = await http.get(Uri.parse(currentConfig.apiUrl)).timeout(const Duration(seconds: 10));
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Connecté au serveur API (${response.statusCode})"), backgroundColor: Colors.green)
+                      SnackBar(content: Text("Connecté au serveur API (${response.statusCode})"), backgroundColor: Colors.green)
                   );
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Erreur : Impossible de contacter l'API"), backgroundColor: Colors.red)
+                      const SnackBar(content: Text("Erreur : Impossible de contacter l'API"), backgroundColor: Colors.red)
                   );
                 }
               }
@@ -188,12 +163,7 @@ class _RapportPageState extends State<RapportPage> {
           Stack(
             alignment: Alignment.center,
             children: [
-              IconButton(
-                icon: _isSyncing 
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.cloud_upload),
-                onPressed: _isSyncing ? null : _handleSync,
-              ),
+
               if (_unsyncedCount > 0 && !_isSyncing)
                 Positioned(
                   right: 8, top: 8,
@@ -229,40 +199,40 @@ class _RapportPageState extends State<RapportPage> {
             ListTile(leading: const Icon(Icons.dashboard), title: const Text("Tableau de Bord"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardPage())); }),
             if (_role == 'boss') ...[
               ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
-               ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
-               ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
+              ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
+              ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
             ],
             ListTile(leading: const Icon(Icons.analytics, color: Colors.blue), title: const Text("Rapports"), onTap: () => Navigator.pop(context)),
             ListTile(
-              leading: const Icon(Icons.settings, color: Colors.blueGrey),
-              title: const Text("Configuration API"),
-              onTap: () {
-                Navigator.pop(context);
-                _afficherConfiguration();
-              }
+                leading: const Icon(Icons.settings, color: Colors.blueGrey),
+                title: const Text("Configuration API"),
+                onTap: () {
+                  Navigator.pop(context);
+                  _afficherConfiguration();
+                }
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.grey), 
-              title: const Text("Déconnexion"), 
-              onTap: () async {
-                bool confirm = await showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text("Déconnexion"),
-                    content: const Text("Voulez-vous vraiment vous déconnecter ?"),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
-                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
-                    ],
-                  ),
-                ) ?? false;
-                if (confirm) {
-                  await AuthService.logout();
-                  if (!mounted) return;
-                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                leading: const Icon(Icons.logout, color: Colors.grey),
+                title: const Text("Déconnexion"),
+                onTap: () async {
+                  bool confirm = await showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text("Déconnexion"),
+                      content: const Text("Voulez-vous vraiment vous déconnecter ?"),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
+                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
+                      ],
+                    ),
+                  ) ?? false;
+                  if (confirm) {
+                    await AuthService.logout();
+                    if (!mounted) return;
+                    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                  }
                 }
-              }
             ),
           ],
         ),
@@ -281,9 +251,9 @@ class _RapportPageState extends State<RapportPage> {
                 items: [
                   const DropdownMenuItem(value: null, child: Text("Global (Mon Entreprise)")),
                   ..._depots.map((d) => DropdownMenuItem(
-                        value: d['idDepot'],
-                        child: Text(d['nomDepot'] as String),
-                      )),
+                    value: d['idDepot'],
+                    child: Text(d['nomDepot'] as String),
+                  )),
                 ],
                 onChanged: (val) {
                   setState(() {
@@ -293,13 +263,12 @@ class _RapportPageState extends State<RapportPage> {
               ),
             ),
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: _handleSync,
+
               child: FutureBuilder<List<Map<String, dynamic>>>(
                 key: ValueKey("rapport_$_selectedDepotId$_refreshKey"),
                 future: DatabaseHelper().getRapportGlobal(
-                  depotId: _selectedDepotId, 
-                  magasinId: _magasinId
+                    depotId: _selectedDepotId,
+                    magasinId: _magasinId
                 ),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -320,7 +289,7 @@ class _RapportPageState extends State<RapportPage> {
 
                       Color color = Colors.blue;
                       IconData icon = Icons.add_box;
-                      
+
                       if (type == 'VENTE') {
                         color = Colors.red;
                         icon = Icons.shopping_cart;
@@ -333,8 +302,8 @@ class _RapportPageState extends State<RapportPage> {
                       }
 
                       final String dateStr = item['date']?.toString() ?? "";
-                      final displayDate = dateStr.length >= 16 
-                          ? dateStr.substring(0, 16).replaceAll('T', ' ') 
+                      final displayDate = dateStr.length >= 16
+                          ? dateStr.substring(0, 16).replaceAll('T', ' ')
                           : dateStr;
 
                       return Card(
@@ -352,9 +321,9 @@ class _RapportPageState extends State<RapportPage> {
                           trailing: Text(
                             "${type == 'VENTE' ? '-' : '+'}${item['quantite']}",
                             style: TextStyle(
-                              fontWeight: FontWeight.bold, 
-                              color: color, 
-                              fontSize: 18
+                                fontWeight: FontWeight.bold,
+                                color: color,
+                                fontSize: 18
                             ),
                           ),
                         ),
@@ -363,7 +332,7 @@ class _RapportPageState extends State<RapportPage> {
                   );
                 },
               ),
-            ),
+
           ),
         ],
       ),

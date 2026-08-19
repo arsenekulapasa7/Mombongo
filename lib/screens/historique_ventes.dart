@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
+import '../models/ConfigurationModel.dart';
+import '../models/SyncronisationModel.dart';
 import '../utilis/pdf_service.dart';
 import '../utilis/auth_service.dart';
 import 'package:intl/intl.dart';
-import '../utilis/sync_service.dart';
 import 'StockPage.dart';
 import 'liste_articles.dart';
 import 'DashbordPage.dart';
@@ -28,14 +31,20 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
   int? _currentDepotId;
   int? _magasinId;
   String _nomDepot = "Mon Point de Vente";
-  int? _selectedFilterDepotId; 
+  int? _selectedFilterDepotId;
   List<Map<String, dynamic>> _allDepots = [];
   String _role = "vendeur";
-  
+
+
   // Variables pour la synchronisation
   bool _isSyncing = false;
   int _unsyncedCount = 0;
   int _refreshKey = 0;
+  String serverConnexionString = "Data Source=SQL5083.site4now.net;Initial Catalog=db_a54efd_synchronizedb;"
+      "User Id=db_a54efd_synchronizedb_admin;Password=12345678GL;Encrypt=True;TrustServerCertificate=True";
+  String localDb = "MaGestion.db";
+  String fileName = "config.txt";
+  List<String> configurationTableFile =['magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'];
 
   @override
   void initState() {
@@ -57,7 +66,7 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
     }
 
     final List<Map<String, dynamic>> depots = await DatabaseHelper().getDepots(magId);
-    
+
     String nomDep = "Mon Point de Vente";
     if (depId != null) {
       final found = depots.firstWhere((d) => d['idDepot'] == depId, orElse: () => {});
@@ -83,34 +92,25 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
       setState(() => _unsyncedCount = count);
     }
   }
-
-  Future<void> _handleSync() async {
-    if (_isSyncing) return;
-    setState(() => _isSyncing = true);
+  Future<bool> createConfigurationFile(SyncModel syncData) async {
+    final Uri url = Uri.parse('https://votre-serveur.com');
 
     try {
-      await SyncService().synchronizeData();
-      await _checkUnsynced();
-      _chargerDonnees();
+      final response = await http.post(
+        url,
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(syncData.toJson()),
+      );
 
-      if (mounted) {
-        setState(() {
-          _isSyncing = false;
-          _refreshKey++; 
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Historique synchronisé !"), backgroundColor: Colors.green),
-        );
-      }
+      return response.statusCode == 201 || response.statusCode == 200;
     } catch (e) {
-      if (mounted) {
-        setState(() => _isSyncing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("🚨 Échec sync : $e"), backgroundColor: Colors.red),
-        );
-      }
+      print('Erreur réseau : $e');
+      return false;
     }
   }
+
 
   void _afficherConfiguration() {
     Config currentConfig = Config(
@@ -144,13 +144,13 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
                 final response = await http.get(Uri.parse(currentConfig.apiUrl)).timeout(const Duration(seconds: 10));
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Connecté au serveur API (${response.statusCode})"), backgroundColor: Colors.green)
+                      SnackBar(content: Text("Connecté au serveur API (${response.statusCode})"), backgroundColor: Colors.green)
                   );
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Erreur : Impossible de contacter l'API"), backgroundColor: Colors.red)
+                      const SnackBar(content: Text("Erreur : Impossible de contacter l'API"), backgroundColor: Colors.red)
                   );
                 }
               }
@@ -197,9 +197,9 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
   void _chargerDonnees() {
     setState(() {
       _ventesFuture = DatabaseHelper().getVentesParDate(
-        _dateFiltre, 
-        _selectedFilterDepotId, 
-        magasinId: _magasinId
+          _dateFiltre,
+          _selectedFilterDepotId,
+          magasinId: _magasinId
       );
     });
   }
@@ -212,13 +212,13 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
       final q = _searchQuery.toLowerCase();
       return nomP.contains(q) || nomC.contains(q);
     }).toList();
-    
+
     if (filteredList.isEmpty) {
-       if (!mounted) return;
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Aucune donnée à imprimer")));
-       return;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Aucune donnée à imprimer")));
+      return;
     }
-    
+
     await PdfService.imprimerJournalVentes(filteredList, _dateFiltre.isEmpty ? "Global" : _dateFiltre);
   }
 
@@ -278,24 +278,7 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
           ),
           Stack(
             alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: _isSyncing
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.cloud_upload),
-                onPressed: _isSyncing ? null : _handleSync,
-              ),
-              if (_unsyncedCount > 0 && !_isSyncing)
-                Positioned(
-                  right: 8, top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text('$_unsyncedCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  ),
-                ),
-            ],
+
           ),
           IconButton(
             icon: const Icon(Icons.calendar_today),
@@ -346,40 +329,72 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
             ListTile(leading: const Icon(Icons.dashboard), title: const Text("Tableau de Bord"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardPage())); }),
             if (_role == 'boss') ...[
               ListTile(leading: const Icon(Icons.inventory, color: Colors.blue), title: const Text("Stock"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const StockPage())); }),
-               ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
-               ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
+              ListTile(leading: const Icon(Icons.add_business, color: Colors.brown), title: const Text("Nouveau Magasin"), onTap: () { Navigator.pop(context); _ouvrirNouveauMagasin(); }),
+              ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
             ],
             ListTile(leading: const Icon(Icons.analytics), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
             ListTile(
               leading: const Icon(Icons.settings, color: Colors.blueGrey),
               title: const Text("Configuration API"),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                _afficherConfiguration();
-              }
+                bool isSuccess = false;
+
+                try {
+                  // 1. On crée d'abord l'objet avec vos variables dédiées
+                  ConfigurationModel config = ConfigurationModel(
+                    configurationTableFile: configurationTableFile,
+                    fileName: fileName,
+                  );
+
+                  // 2. On l'enveloppe dans le SyncModel attendu par la fonction
+                  SyncModel donneesSync = SyncModel(
+                    serverConnexionString: "Data Source=SQL5083.site4now.net,1433;Initial Catalog=db_a54efd_synchronizedb;User Id=db_a54efd_synchronizedb_admin;Password=12345678GL;Encrypt=True;TrustServerCertificate=True;",
+                    localDb: "MaGestion.db",
+                    fileName: "configuration_tables.txt", // ou "config.txt"
+                  );
+
+                  // 3. Appel de la fonction avec le bon type (SyncModel)
+                  isSuccess = await createConfigurationFile(donneesSync);
+
+                } catch (erreur) {
+                  print("Erreur détectée : $erreur");
+                  isSuccess = false;
+                }
+
+                if (!mounted) return;
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isSuccess ? "Configuration enregistrée !" : "Erreur lors de la création."),
+                    backgroundColor: isSuccess ? Colors.green : Colors.red,
+                  ),
+                );
+              },
             ),
+
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.grey), 
-              title: const Text("Déconnexion"), 
-              onTap: () async {
-                bool confirm = await showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text("Déconnexion"),
-                    content: const Text("Voulez-vous vraiment vous déconnecter ?"),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
-                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
-                    ],
-                  ),
-                ) ?? false;
-                if (confirm) {
-                  await AuthService.logout();
-                  if (!mounted) return;
-                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                leading: const Icon(Icons.logout, color: Colors.grey),
+                title: const Text("Déconnexion"),
+                onTap: () async {
+                  bool confirm = await showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text("Déconnexion"),
+                      content: const Text("Voulez-vous vraiment vous déconnecter ?"),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
+                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
+                      ],
+                    ),
+                  ) ?? false;
+                  if (confirm) {
+                    await AuthService.logout();
+                    if (!mounted) return;
+                    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                  }
                 }
-              }
             ),
           ],
         ),
@@ -422,12 +437,12 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
               decoration: InputDecoration(
                 hintText: "Chercher un produit ou un client...",
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty 
-                  ? IconButton(icon: const Icon(Icons.clear), onPressed: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = "");
-                    }) 
-                  : null,
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(icon: const Icon(Icons.clear), onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = "");
+                })
+                    : null,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 filled: true,
                 fillColor: Colors.grey.shade100,
@@ -443,7 +458,7 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) return Center(child: Text("Erreur : ${snapshot.error}"));
-                
+
                 final rawList = snapshot.data ?? [];
                 if (rawList.isEmpty) return const Center(child: Text("Aucune vente trouvée."));
 
@@ -472,21 +487,21 @@ class _HistoriqueVentesState extends State<HistoriqueVentes> {
                       child: filteredList.isEmpty
                           ? const Center(child: Text("Aucun résultat pour cette recherche"))
                           : ListView.builder(
-                              itemCount: filteredList.length,
-                              itemBuilder: (context, index) {
-                                final vente = filteredList[index];
-                                return Card(
-                                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  child: ListTile(
-                                    leading: const Icon(Icons.receipt_long, color: Colors.green),
-                                    title: Text(vente['nom_produit'] ?? "Produit", style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    subtitle: Text("${vente['nom_client'] ?? 'Divers'} - ${vente['date_vente'].toString().substring(0, 10)}"),
-                                    onTap: () => _afficherFacture(vente),
-                                    trailing: Text("${vente['prix_total']} USD", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
-                                  ),
-                                );
-                              },
+                        itemCount: filteredList.length,
+                        itemBuilder: (context, index) {
+                          final vente = filteredList[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            child: ListTile(
+                              leading: const Icon(Icons.receipt_long, color: Colors.green),
+                              title: Text(vente['nom_produit'] ?? "Produit", style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text("${vente['nom_client'] ?? 'Divers'} - ${vente['date_vente'].toString().substring(0, 10)}"),
+                              onTap: () => _afficherFacture(vente),
+                              trailing: Text("${vente['prix_total']} USD", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
                             ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 );
