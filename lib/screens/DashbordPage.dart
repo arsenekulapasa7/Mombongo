@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:my_business/database/database_helper.dart';
 import 'package:my_business/utilis/auth_service.dart';
@@ -10,6 +12,8 @@ import 'UserManagementPage.dart';
 import 'login_page.dart';
 import '../models/configuration.dart';
 import 'package:http/http.dart' as http;
+import '../models/SyncronisationModel.dart';
+import '../models/ConfigurationModel.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -28,6 +32,7 @@ class _DashboardPageState extends State<DashboardPage> {
   int _unsyncedCount = 0;
   int _refreshKey = 0;
 
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +40,7 @@ class _DashboardPageState extends State<DashboardPage> {
     _initData();
     _checkUnsynced();
   }
+
 
   void _initData() async {
     final int? magId = await AuthService.getMagasinId();
@@ -75,33 +81,35 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     });
   }
-
-  Future<void> _handleSync() async {
-    if (_isSyncing) return;
-    setState(() => _isSyncing = true);
+  Future<bool> createConfigurationFile(ConfigurationModel config) async {
+    // Remplacez par l'URL réelle de votre API backend
+    final Uri url = Uri.parse('http://afrisofttech-002-site50.jtempurl.com');
 
     try {
-      await SyncService().synchronizeData();
-      await _checkUnsynced();
-      _refreshStats();
-      if (mounted) {
-        setState(() {
-          _isSyncing = false;
-          _refreshKey++;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Statistiques synchronisées !"), backgroundColor: Colors.green),
-        );
+      final response = await http.post(
+        url,
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+          // 'Authorization': 'Bearer VOTRE_TOKEN', // À ajouter si votre API est sécurisée
+        },
+        // toJson() convertit l'objet en Map, jsonEncode le convertit en chaîne JSON
+        body: jsonEncode(config.toJson()),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        print('Fichier créé avec succès sur le serveur.');
+        return true;
+      } else {
+        print('Erreur serveur : ${response.statusCode} - ${response.body}');
+        return false;
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isSyncing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("🚨 Échec sync : $e"), backgroundColor: Colors.red),
-        );
-      }
+      print('Une erreur réseau est survenue : $e');
+      return false;
     }
   }
+
+
 
   void _afficherConfiguration() {
     Config currentConfig = Config(
@@ -205,12 +213,7 @@ class _DashboardPageState extends State<DashboardPage> {
           Stack(
             alignment: Alignment.center,
             children: [
-              IconButton(
-                icon: _isSyncing
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.cloud_upload),
-                onPressed: _isSyncing ? null : _handleSync,
-              ),
+
               if (_unsyncedCount > 0 && !_isSyncing)
                 Positioned(
                   right: 8, top: 8,

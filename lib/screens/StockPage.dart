@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:my_business/database/database_helper.dart';
 import 'package:my_business/models/articles.dart';
 import 'package:my_business/screens/RapportPage.dart';
@@ -11,7 +12,10 @@ import 'package:my_business/screens/UserManagementPage.dart';
 import 'package:my_business/screens/liste_articles.dart';
 import 'package:my_business/screens/historique_ventes.dart';
 import 'package:my_business/utilis/sync_service.dart';
-import '../models/configuration.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/ConfigurationModel.dart';
+import '../models/SyncronisationModel.dart';
+import '../utilis/ApiService.dart';
 
 class StockPage extends StatefulWidget {
   const StockPage({super.key});
@@ -26,17 +30,25 @@ class _StockPageState extends State<StockPage> {
   int? _magasinId;
   String _nomDepot = "Mon Dépôt";
   List<Map<String, dynamic>> _allDepots = [];
-  int? _selectedFilterDepotId; 
-  String _role = "vendeur"; 
+  int? _selectedFilterDepotId;
+  String _role = "vendeur";
   int _refreshKey = 0;
   int _unsyncedCount = 0;
   bool _isSyncing = false;
+  String serverConnexionString = "Data Source=SQL5083.site4now.net;Initial Catalog=db_a54efd_synchronizedb;"
+      "User Id=db_a54efd_synchronizedb_admin;Password=12345678GL;Encrypt=True;TrustServerCertificate=True";
+  String localDb = "MaGestion.db";
+  String fileName = "config_tables.txt";
+  List<String>  configurationTableFile = ['magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'];
+  bool _isFileCreated = false;
+  final _secureStorage = const FlutterSecureStorage();
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
     _checkUnsynced();
+    _verifierStatutInstallation();
   }
 
   void _loadUserData() async {
@@ -46,9 +58,9 @@ class _StockPageState extends State<StockPage> {
     final role = roleRaw.toLowerCase().trim();
 
     if (magId == null) {
-       if (!mounted) return;
-       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
-       return;
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
+      return;
     }
 
     final List<Map<String, dynamic>> depots = await DatabaseHelper().getDepots(magId);
@@ -73,126 +85,31 @@ class _StockPageState extends State<StockPage> {
     });
   }
 
+  /// Envoie les informations de connexion et de base de données pour la synchronisation.
+
   Future<void> _checkUnsynced() async {
     int count = await DatabaseHelper().getUnsyncedCount();
     if (mounted) {
       setState(() { _unsyncedCount = count; });
     }
   }
+  Future<void> _verifierStatutInstallation() async {
+    // Tente de lire la clé unique enregistrée dans le téléphone
+    String? statut = await _secureStorage.read(key: 'api_initialisation_complete');
 
-  Future<void> _handleSync() async {
-    await startSynchronization();
+    setState(() {
+      // Si la valeur récupérée est textuellement 'true', le bouton se grise
+      _isFileCreated = (statut == 'true');
+    });
   }
 
-  Future<void> startSynchronization() async {
-    if (_isSyncing) return;
-    setState(() => _isSyncing = true);
-
-    final url = Uri.parse('http://afrisofttech-002-site50.jtempurl.com/api/SynchronizeSync/Synchronization');
-
-    try {
-      final db = await DatabaseHelper().database;
-      final List<String> tables = ['magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'];
-      Map<String, List<Map<String, dynamic>>> payload = {};
-
-      for (String table in tables) {
-        List<Map<String, dynamic>> unsynced = await db.query(table, where: 'is_synced = ?', whereArgs: [0]);
-        if (unsynced.isNotEmpty) {
-          payload[table] = unsynced;
-        }
-      }
-
-      if (payload.isEmpty) {
-        await SyncService().synchronizeData(); 
-        await _checkUnsynced();
-        if (mounted) {
-          setState(() { _isSyncing = false; _refreshKey++; });
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Vos données sont déjà à jour.")));
-        }
-        return;
-      }
-
-      final Map<String, dynamic> requestBody = {
-        "serverConnexionString": "Data Source=SQL5083.site4now.net;Initial Catalog=db_a54efd_synchronizedb;User Id=db_a54efd_synchronizedb_admin;Password=12345678GL;Encrypt=True;TrustServerCertificate=True",
-        "localDb": "MaGestion.db",
-        "fileName": "MaGestion.db",
-        "body": payload 
-      };
-
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode(requestBody),
-      ).timeout(const Duration(seconds: 30));
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        for (String table in payload.keys) {
-          await db.update(table, {'is_synced': 1}, where: 'is_synced = ?', whereArgs: [0]);
-        }
-        if (_magasinId != null) await SyncService().synchronizeData(); 
-        await _checkUnsynced();
-        if (mounted) {
-          setState(() { _isSyncing = false; _refreshKey++; });
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ SYNCHRONISATION RÉUSSIE !"), backgroundColor: Colors.green));
-        }
-      } else {
-        throw Exception("Erreur serveur (${response.statusCode})");
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSyncing = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("🚨 ÉCHEC SYNC : $e"), backgroundColor: Colors.red));
-      }
-    }
-  }
-
-  void _afficherConfiguration() {
-    Config currentConfig = Config(
-        configurationTableFile: "'magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'",
-        fileName: 'MaGestion.db',
-        body: 'Système relié à l\'API',
-        apiUrl: 'http://afrisofttech-002-site50.jtempurl.com'
-    );
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Configuration du Serveur"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 10),
-            Text("Base locale : ${currentConfig.fileName}"),
-            const SizedBox(height: 10),
-            const Text("URL API :", style: TextStyle(fontWeight: FontWeight.bold)),
-            Text(currentConfig.apiUrl, style: const TextStyle(fontSize: 12, color: Colors.blue)),
-            const SizedBox(height: 10),
-            Text("Statut : ${currentConfig.body}"),
-          ],
-        ),
-        actions: [
-          ElevatedButton.icon(
-            icon: const Icon(Icons.sync_alt),
-            label: const Text("Vérifier Liaison"),
-            onPressed: () async {
-              try {
-                final response = await http.get(Uri.parse(currentConfig.apiUrl)).timeout(const Duration(seconds: 10));
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Serveur contacté (${response.statusCode})"), backgroundColor: Colors.green));
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Impossible de contacter le serveur"), backgroundColor: Colors.red));
-                }
-              }
-            },
-          ),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fermer")),
-        ],
+// Fonction utilitaire pour afficher les notifications à l'utilisateur
+  void _showSnackBar(BuildContext context, String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -294,9 +211,60 @@ class _StockPageState extends State<StockPage> {
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: _isSyncing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.cloud_upload),
-                onPressed: _isSyncing ? null : _handleSync,
+                icon: _isSyncing
+                    ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.blueGrey, strokeWidth: 2),
+                )
+                    : const Icon(Icons.cloud_upload),
+                onPressed: _isSyncing
+                    ? null
+                    : () async {
+                  setState(() => _isSyncing = true);
+
+                  try {
+                    final apiService = ApiService();
+                    String nomDuFichier = "config_tables.txt";
+
+                    // =========================================================
+                    // EXÉCUTION COMMANDE 2 UNIQUEMENT : Synchronisation Directe
+                    // =========================================================
+                    SyncModel monSyncModel = SyncModel(
+                      serverConnexionString: "Data Source=SQL5083.site4now.net;Initial Catalog=db_a54efd_synchronizedb;User Id=db_a54efd_synchronizedb_admin;Password=12345678GL;Encrypt=True;TrustServerCertificate=True",
+                      localDb: "MaGestion.db",
+                      fileName: nomDuFichier,
+                    );
+
+                    _showSnackBar(context, "🔄 Lancement de la synchronisation des données...", Colors.blue);
+
+                    // Appelle uniquement l'étape 2 (qui utilise le JSON strict à 3 champs)
+                    bool isSuccess = await apiService.syncAllDatabaseData(monSyncModel);
+
+                    if (!mounted) return;
+
+                    if (isSuccess) {
+                      setState(() {
+                        _refreshKey++; // Incrémente la clé pour vider et rafraîchir l'écran
+                      });
+                      _showSnackBar(context, "✅ Base de données entièrement synchronisée !", Colors.green);
+                    } else {
+                      _showSnackBar(context, "🚨 Échec de la synchronisation (Regardez la console).", Colors.red);
+                    }
+
+                  } catch (e) {
+                    print("🚨 Erreur d'exécution du bouton : $e");
+                    if (mounted) {
+                      _showSnackBar(context, "🚨 Erreur système lors de la synchronisation.", Colors.red);
+                    }
+                  } finally {
+                    if (mounted) {
+                      setState(() => _isSyncing = false);
+                    }
+                  }
+                },
               ),
+
               if (_unsyncedCount > 0 && !_isSyncing)
                 Positioned(right: 8, top: 8, child: CircleAvatar(radius: 8, backgroundColor: Colors.red, child: Text('$_unsyncedCount', style: const TextStyle(color: Colors.white, fontSize: 8)))),
             ],
@@ -322,34 +290,78 @@ class _StockPageState extends State<StockPage> {
             ListTile(leading: const Icon(Icons.history, color: Colors.orange), title: const Text("Historique"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoriqueVentes())); }),
             const Divider(),
             if (_role == 'boss') ...[
-               ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
-               const Divider(),
+              ListTile(leading: const Icon(Icons.admin_panel_settings, color: Colors.red), title: const Text("Vendeurs"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const UserManagementPage())); }),
+              const Divider(),
             ],
             ListTile(leading: const Icon(Icons.dashboard, color: Colors.blue), title: const Text("Dashboard"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardPage())); }),
             ListTile(leading: const Icon(Icons.analytics, color: Colors.purple), title: const Text("Rapports"), onTap: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => const RapportPage())); }),
-            ListTile(leading: const Icon(Icons.settings, color: Colors.blueGrey), title: const Text("Configuration"), onTap: () { Navigator.pop(context); _afficherConfiguration(); }),
+            ListTile(
+              leading: Icon(
+                Icons.settings,
+                color: _isFileCreated ? Colors.grey : Colors.blueGrey,
+              ),
+              title: Text(
+                _isFileCreated ? "API configurée (Fichier créé)" : "Configuration API",
+                style: TextStyle(color: _isFileCreated ? Colors.grey : null),
+              ),
+              onTap: _isFileCreated
+                  ? null
+                  : () async {
+                Navigator.pop(context); // Ferme le menu latéral
+
+                final apiService = ApiService();
+                String nomDuFichier = "config_tables.txt";
+
+                ConfigurationModel modelConfig = ConfigurationModel(
+                  fileName: nomDuFichier,
+                  configurationTableFile: ['magasins', 'depots', 'produits', 'utilisateurs', 'ventes', 'mouvements'],
+                );
+
+                _showSnackBar(context, "🔄 Étape 1 : Création du fichier sur le serveur...", Colors.blue);
+
+                // Exécute SEULEMENT la commande 1
+                bool isConfigSaved = await apiService.createConfigurationFile(modelConfig);
+
+                if (!context.mounted) return;
+
+                if (isConfigSaved) {
+                  _showSnackBar(context, "✅ Fichier de configuration créé avec succès !", Colors.green);
+
+                  // Sauvegarde de l'état pour bloquer le bouton définitivement
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('api_file_created', true);
+
+                  setState(() {
+                    _isFileCreated = true;
+                  });
+                } else {
+                  _showSnackBar(context, "🚨 Échec : Impossible de créer le fichier texte sur le serveur.", Colors.red);
+                }
+              },
+            ),
+
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.grey), 
-              title: const Text("Déconnexion"), 
-              onTap: () async {
-                bool confirm = await showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text("Déconnexion"),
-                    content: const Text("Voulez-vous vraiment vous déconnecter ?"),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
-                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
-                    ],
-                  ),
-                ) ?? false;
-                if (confirm) {
-                  await AuthService.logout();
-                  if (!mounted) return;
-                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                leading: const Icon(Icons.logout, color: Colors.grey),
+                title: const Text("Déconnexion"),
+                onTap: () async {
+                  bool confirm = await showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text("Déconnexion"),
+                      content: const Text("Voulez-vous vraiment vous déconnecter ?"),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
+                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui")),
+                      ],
+                    ),
+                  ) ?? false;
+                  if (confirm) {
+                    await AuthService.logout();
+                    if (!mounted) return;
+                    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginPage()), (route) => false);
+                  }
                 }
-              }
             ),
           ],
         ),
@@ -380,7 +392,7 @@ class _StockPageState extends State<StockPage> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Aucun article."));
-                
+
                 final list = snapshot.data!.where((item) => item['nom'].toString().toLowerCase().contains(_searchQuery.toLowerCase())).toList();
                 return ListView.builder(
                   itemCount: list.length,
@@ -427,9 +439,9 @@ class _StockPageState extends State<StockPage> {
         ],
       ),
       floatingActionButton: _role == 'boss' ? FloatingActionButton(
-        onPressed: () => _ouvrirFormulaireAjout(context), 
-        backgroundColor: Colors.blue.shade800,
-        child: const Icon(Icons.add, color: Colors.white)
+          onPressed: () => _ouvrirFormulaireAjout(context),
+          backgroundColor: Colors.blue.shade800,
+          child: const Icon(Icons.add, color: Colors.white)
       ) : null,
     );
   }
