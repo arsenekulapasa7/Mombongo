@@ -35,32 +35,57 @@ class DatabaseHelper {
     );
   }
 
+  // ...existing code...
+
   Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), 'MaGestion.db');
     return await openDatabase(
       path,
-      version: 19, 
+      version: 20,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 19) {
-          await db.execute('DROP TABLE IF EXISTS mouvements');
-          await db.execute('DROP TABLE IF EXISTS ventes');
-          await db.execute('DROP TABLE IF EXISTS produits');
-          await db.execute('DROP TABLE IF EXISTS utilisateurs');
-          await db.execute('DROP TABLE IF EXISTS depots');
-          await db.execute('DROP TABLE IF EXISTS magasins');
-          await _onCreate(db, newVersion);
+        if (oldVersion < 20) {
+          await _addMissingColumnsToAllTables(db);
         }
       },
     );
   }
 
+  Future<void> _addMissingColumnsToAllTables(Database db) async {
+    final List<String> tables = [
+      'magasins',
+      'depots',
+      'produits',
+      'ventes',
+      'mouvements',
+      'utilisateurs',
+    ];
+
+    for (final table in tables) {
+      final columns = await db.rawQuery('PRAGMA table_info($table)');
+
+      final hasLastUpdated = columns.any((column) =>
+          (column['name'] as String).toLowerCase() == 'lastupdated');
+
+      final hasIsDeleted = columns.any((column) =>
+          (column['name'] as String).toLowerCase() == 'isdeleted');
+
+      if (!hasLastUpdated) {
+        await db.execute('ALTER TABLE $table ADD COLUMN LastUpdated TEXT DEFAULT NULL');
+      }
+
+      if (!hasIsDeleted) {
+        await db.execute('ALTER TABLE $table ADD COLUMN IsDeleted INTEGER NOT NULL DEFAULT 0');
+      }
+    }
+  }
+
   Future _onCreate(Database db, int version) async {
-    await db.execute('CREATE TABLE magasins (idMagasin INTEGER PRIMARY KEY AUTOINCREMENT, nomMagasin TEXT NOT NULL UNIQUE, is_synced INTEGER DEFAULT 0)');
-    await db.execute('CREATE TABLE depots (idDepot INTEGER PRIMARY KEY AUTOINCREMENT, nomDepot TEXT NOT NULL, magasin_id INTEGER NOT NULL, is_synced INTEGER DEFAULT 0, FOREIGN KEY (magasin_id) REFERENCES magasins (idMagasin) ON DELETE CASCADE)');
-    await db.execute('CREATE TABLE produits (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT NOT NULL COLLATE NOCASE, quantite INTEGER DEFAULT 0, prix_unitaire REAL DEFAULT 0.0, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
-    await db.execute('CREATE TABLE ventes (id INTEGER PRIMARY KEY AUTOINCREMENT, id_transaction TEXT, produit_id INTEGER, nom_produit TEXT, nom_client TEXT, quantite_vendue INTEGER, prix_total REAL, date_vente TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
-    await db.execute('CREATE TABLE mouvements (id INTEGER PRIMARY KEY AUTOINCREMENT, produit_id INTEGER, nom_produit TEXT, quantite INTEGER, type TEXT, date_mouvement TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
+    await db.execute('CREATE TABLE magasins (idMagasin INTEGER PRIMARY KEY AUTOINCREMENT, nomMagasin TEXT NOT NULL UNIQUE, is_synced INTEGER DEFAULT 0, LastUpdated TEXT DEFAULT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0)');
+    await db.execute('CREATE TABLE depots (idDepot INTEGER PRIMARY KEY AUTOINCREMENT, nomDepot TEXT NOT NULL, magasin_id INTEGER NOT NULL, is_synced INTEGER DEFAULT 0, LastUpdated TEXT DEFAULT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (magasin_id) REFERENCES magasins (idMagasin) ON DELETE CASCADE)');
+    await db.execute('CREATE TABLE produits (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT NOT NULL COLLATE NOCASE, quantite INTEGER DEFAULT 0, prix_unitaire REAL DEFAULT 0.0, depot_id INTEGER, is_synced INTEGER DEFAULT 0, LastUpdated TEXT DEFAULT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
+    await db.execute('CREATE TABLE ventes (id INTEGER PRIMARY KEY AUTOINCREMENT, id_transaction TEXT, produit_id INTEGER, nom_produit TEXT, nom_client TEXT, quantite_vendue INTEGER, prix_total REAL, date_vente TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, LastUpdated TEXT DEFAULT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
+    await db.execute('CREATE TABLE mouvements (id INTEGER PRIMARY KEY AUTOINCREMENT, produit_id INTEGER, nom_produit TEXT, quantite INTEGER, type TEXT, date_mouvement TEXT, depot_id INTEGER, is_synced INTEGER DEFAULT 0, LastUpdated TEXT DEFAULT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE CASCADE)');
     await db.execute('''CREATE TABLE utilisateurs (
       idUser INTEGER PRIMARY KEY AUTOINCREMENT, 
       nomUser TEXT NOT NULL UNIQUE COLLATE NOCASE, 
@@ -70,17 +95,17 @@ class DatabaseHelper {
       magasin_id INTEGER NOT NULL, 
       depot_id INTEGER, 
       is_synced INTEGER DEFAULT 0,
+      LastUpdated TEXT DEFAULT NULL,
+      IsDeleted INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (magasin_id) REFERENCES magasins (idMagasin) ON DELETE CASCADE, 
       FOREIGN KEY (depot_id) REFERENCES depots (idDepot) ON DELETE SET NULL
     )''');
+
     await db.execute("CREATE INDEX idx_magasin_depots ON depots (magasin_id)");
     await db.execute("CREATE INDEX idx_magasin_users ON utilisateurs (magasin_id)");
     await db.execute("CREATE INDEX idx_prod_depot ON produits (depot_id)");
   }
 
-
-
-  // --- SYNCHRONISATION ---
 
   Future<int> getUnsyncedCount() async {
     Database db = await database;
@@ -134,6 +159,7 @@ class DatabaseHelper {
       await AuthService.setLastSyncDate(DateTime.now().toIso8601String());
     }
   }
+  
 
   // --- MAGASINS ET DEPOTS ---
 
